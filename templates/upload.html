@@ -195,32 +195,72 @@
 
     <!-- POC 功能邊界 -->
     <div class="bg-amber-50 border border-amber-200 rounded-xl p-5">
-      <h3 class="text-sm font-semibold text-amber-800 mb-3">POC 功能邊界說明</h3>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs text-amber-900">
-        <div>
-          <p class="font-semibold mb-1.5">本版本已涵蓋（純規則，零 API 費用）</p>
-          <ul class="space-y-1 text-amber-800">
-            <li>✅ 文件完整性（4 條）</li>
-            <li>✅ 審議資料表欄位核對（3 條）</li>
-            <li>✅ 停車位與容積數值計算驗算（4 條）</li>
-            <li>✅ 個資風險掃描（Regex）</li>
-            <li>✅ 法定用詞錯誤清單比對（15 個詞）</li>
-            <li>✅ 審議資料表 vs 主文數字一致性</li>
-          </ul>
-        </div>
-        <div>
-          <p class="font-semibold mb-1.5">需要 LLM 才能擴充的項目（未來版本）</p>
-          <ul class="space-y-1 text-amber-700">
-            <li>⬜ 真實錯別字偵測（上下文語意）</li>
-            <li>⬜ 各章節敘述邏輯一致性</li>
-            <li>⬜ 容積獎勵各項加總自動核算</li>
-            <li>⬜ 公聽會記錄完整性</li>
-            <li>⬜ 權利變換試算比例驗算</li>
-            <li>⬜ 掃描式 PDF（需 OCR）</li>
-          </ul>
-        </div>
+      <h3 class="text-sm font-semibold text-amber-800 mb-4">POC 功能邊界說明</h3>
+
+      <!-- 已實作 -->
+      <div class="mb-4">
+        <p class="text-xs font-semibold text-amber-800 mb-2">✅ 本版本已涵蓋（純規則，零 API 費用）</p>
+        <ul class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-amber-800">
+          <li>• 文件完整性（4 條）</li>
+          <li>• 審議資料表欄位核對（3 條）</li>
+          <li>• 停車位與容積數值計算驗算（4 條）</li>
+          <li>• 個資風險掃描（Regex）</li>
+          <li>• 法定用詞錯誤清單比對（15 個詞）</li>
+          <li>• 審議資料表 vs 主文數字一致性</li>
+          <li>• 審查結果標明所在頁碼</li>
+        </ul>
       </div>
-      <p class="mt-3 text-xs text-amber-700 border-t border-amber-200 pt-3">
+
+      <!-- 下一版本（已確認需求） -->
+      <div class="mb-4 border-t border-amber-200 pt-4">
+        <p class="text-xs font-semibold text-blue-700 mb-2">🔜 下一版本（2026-06-18 會議確認需求）</p>
+        <ul class="space-y-2 text-xs">
+          <li class="flex gap-2 items-start">
+            <span class="text-blue-500 shrink-0">①</span>
+            <div>
+              <span class="font-medium text-gray-700">兩份文件分開上傳</span>
+              <span class="text-gray-500 ml-1">— 「事業計畫報告書」與「權利變換計畫報告書」各自有獨立上傳欄位</span>
+            </div>
+          </li>
+          <li class="flex gap-2 items-start">
+            <span class="text-blue-500 shrink-0">②</span>
+            <div>
+              <span class="font-medium text-gray-700">版次變更差異比對</span>
+              <span class="text-gray-500 ml-1">— 記錄兩次上傳之間的修改內容，標明文件名稱與頁碼（需資料庫）</span>
+            </div>
+          </li>
+          <li class="flex gap-2 items-start">
+            <span class="text-blue-500 shrink-0">③</span>
+            <div>
+              <span class="font-medium text-gray-700">PDF 直接標註輸出</span>
+              <span class="text-gray-500 ml-1">— 問題直接 highlight 在 PDF 頁面上，輸出帶標記的 PDF（需 LLM + pypdf）</span>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <!-- 未來功能（已記錄，暫緩） -->
+      <div class="mb-4 border-t border-amber-200 pt-4">
+        <p class="text-xs font-semibold text-gray-500 mb-2">📋 後續版本（已記錄，暫緩實作）</p>
+        <ul class="space-y-2 text-xs">
+          <li class="flex gap-2 items-start">
+            <span class="text-gray-400 shrink-0">④</span>
+            <div>
+              <span class="font-medium text-gray-600">法規知識庫管理系統</span>
+              <span class="text-gray-400 ml-1">— 持續上傳法規資料、RAG 查詢、角色權限控管（局處首長／科長／科員）</span>
+            </div>
+          </li>
+          <li class="flex gap-2 items-start">
+            <span class="text-gray-400 shrink-0">⑤</span>
+            <div>
+              <span class="font-medium text-gray-600">LLM 擴充審查</span>
+              <span class="text-gray-400 ml-1">— 真實錯別字、章節邏輯一致性、容積獎勵各項加總、掃描式 PDF（需 OCR）</span>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <p class="text-xs text-amber-700 border-t border-amber-200 pt-3">
         本系統為初步篩查工具，標記的問題仍需人工確認。最終審查結論以人工判斷為準。
       </p>
     </div>
