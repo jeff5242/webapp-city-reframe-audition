@@ -1,0 +1,20 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+*.egg
+
+# Reports (may contain PII from real PDFs)
+demo_report_*.html
+
+# Source documents (real PDFs with personal data)
+事業計劃報告書及權利變更計劃書/
+事業計劃報告書及權利變更計劃書.zip
+*.pdf
+
+# OS
+.DS_Store

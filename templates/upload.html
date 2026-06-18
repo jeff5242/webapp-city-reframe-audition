@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>都市更新審議自動審查</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<div class="max-w-3xl w-full mx-auto px-4 py-10">
+  <div class="text-center mb-8">
+    <h1 class="text-2xl font-bold text-gray-800">臺北市都市更新審議</h1>
+    <p class="text-gray-500 mt-1">自動審查系統 · 111年版規則 POC</p>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 mb-8">
+    <form action="/audit" method="POST" enctype="multipart/form-data" id="uploadForm">
+
+      <!-- Drop Zone -->
+      <label
+        for="fileInput"
+        class="block border-2 border-dashed border-blue-300 rounded-xl p-8 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors"
+        id="dropZone"
+      >
+        <div class="text-4xl mb-3">📄</div>
+        <p class="text-gray-700 font-medium">拖曳或點選上傳 PDF</p>
+        <p class="text-gray-400 text-sm mt-1">可同時上傳事業計畫書 + 權利變換計畫書</p>
+        <input
+          type="file"
+          id="fileInput"
+          name="files"
+          accept=".pdf"
+          multiple
+          class="hidden"
+          onchange="showFiles(this)"
+        >
+      </label>
+
+      <!-- File List -->
+      <div id="fileList" class="mt-4 space-y-2 hidden"></div>
+
+      <!-- Submit -->
+      <button
+        type="submit"
+        id="submitBtn"
+        class="w-full mt-6 bg-blue-700 hover:bg-blue-800 text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled
+      >
+        開始審查
+      </button>
+
+      <!-- Progress -->
+      <div id="progress" class="hidden mt-4 text-center text-sm text-gray-500">
+        <div class="inline-block animate-spin mr-2">⏳</div>
+        審查中，大型 PDF 需要約 30 秒…
+      </div>
+
+    </form>
+  </div>
+
+  <p class="text-center text-xs text-gray-400 mb-10">
+    僅作本機處理，PDF 不會上傳至外部伺服器
+  </p>
+
+  <!-- ── 功能說明 ── -->
+  <div class="space-y-6">
+    <h2 class="text-lg font-semibold text-gray-700 border-b pb-2">本系統執行的審查項目</h2>
+
+    <!-- 文件完整性 -->
+    <div>
+      <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">文件完整性</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3">
+          <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">DOC-001</span>
+          <div>
+            <div class="text-sm font-medium text-gray-700">申請書存在</div>
+            <div class="text-xs text-gray-500">確認封面是否附有申請書</div>
+          </div>
+        </div>
+        <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3">
+          <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">DOC-002</span>
+          <div>
+            <div class="text-sm font-medium text-gray-700">切結書存在</div>
+            <div class="text-xs text-gray-500">確認封面是否附有切結書</div>
+          </div>
+        </div>
+        <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3">
+          <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">DOC-003</span>
+          <div>
+            <div class="text-sm font-medium text-gray-700">委託書至少 1 份</div>
+            <div class="text-xs text-gray-500">識別委託書份數及委託用途</div>
+          </div>
+        </div>
+        <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3">
+          <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">DOC-004</span>
+          <div>
+            <div class="text-sm font-medium text-gray-700">審議資料表存在</div>
+            <div class="text-xs text-gray-500">定位並確認審議資料表頁面</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 審議資料表欄位 -->
+    <div>
+      <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">審議資料表欄位核對</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3">
+          <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">FORM-001</span>
+          <div>
+            <div class="text-sm font-medium text-gray-700">送審類別已勾選</div>
+            <div class="text-xs text-gray-500">A-1 / B-1 / B-2 / C / D</div>
+          </div>
+        </div>
+        <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3">
+          <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">FORM-002</span>
+          <div>
+            <div class="text-sm font-medium text-gray-700">填表日期已填寫</div>
+            <div class="text-xs text-gray-500">審議資料表填表日期欄位</div>
+          </div>
+        </div>
+        <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3">
+          <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">FORM-003</span>
+          <div>
+            <div class="text-sm font-medium text-gray-700">充電車位欄位存在</div>
+            <div class="text-xs text-gray-500">111年版新增欄位，偵測是否使用舊版格式</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 計算驗算 -->
+    <div>
+      <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">公式計算驗算</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div class="flex gap-3 items-start bg-red-50 rounded-lg px-4 py-3 border border-red-100">
+          <span class="text-red-500 font-mono text-xs mt-0.5 shrink-0">CALC-001</span>
+          <div>
+            <div class="text-sm font-medium text-gray-700">容積獎勵不超過上限 <span class="text-red-500 text-xs">必修</span></div>
+            <div class="text-xs text-gray-500">合計獎勵樓地板面積 ≤ 容積獎勵上限（都更條例第65條）</div>
+          </div>
+        </div>
+        <div class="flex gap-3 items-start bg-red-50 rounded-lg px-4 py-3 border border-red-100">
+          <span class="text-red-500 font-mono text-xs mt-0.5 shrink-0">CALC-002</span>
+          <div>
+            <div class="text-sm font-medium text-gray-700">無障礙停車位精確計算 <span class="text-red-500 text-xs">必修</span></div>
+            <div class="text-xs text-gray-500">依建築技術規則第167條之六計算應設輛數：≤50輛→1輛，每增加50輛再加1輛</div>
+          </div>
+        </div>
+        <div class="flex gap-3 items-start bg-red-50 rounded-lg px-4 py-3 border border-red-100">
+          <span class="text-red-500 font-mono text-xs mt-0.5 shrink-0">CALC-003</span>
+          <div>
+            <div class="text-sm font-medium text-gray-700">實設停車位不低於法定要求 <span class="text-red-500 text-xs">必修</span></div>
+            <div class="text-xs text-gray-500">實設汽車停車位 ≥ 法定汽車停車位</div>
+          </div>
+        </div>
+        <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3">
+          <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">CALC-004</span>
+          <div>
+            <div class="text-sm font-medium text-gray-700">容積獎勵上限計算驗算</div>
+            <div class="text-xs text-gray-500">確認表中上限 ≈ 基準容積 × 50%（都更條例第65條）</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 個資與用詞 -->
+    <div>
+      <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">個資保護與用詞核對</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3">
+          <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">PII-001</span>
+          <div>
+            <div class="text-sm font-medium text-gray-700">高風險個資偵測</div>
+            <div class="text-xs text-gray-500">掃描電話、住宅地址（含弄號）、身分證字號</div>
+          </div>
+        </div>
+        <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3">
+          <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">TERM-001</span>
+          <div>
+            <div class="text-sm font-medium text-gray-700">法定用詞錯誤</div>
+            <div class="text-xs text-gray-500">偵測常見錯誤用詞，如「協議合件」→「協議合建」、「計劃書」→「計畫書」</div>
+          </div>
+        </div>
+        <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3 sm:col-span-2">
+          <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">CONS-001</span>
+          <div>
+            <div class="text-sm font-medium text-gray-700">關鍵數字前後一致性</div>
+            <div class="text-xs text-gray-500">比對審議資料表與主文各章節的停車位數量、容積獎勵面積是否吻合</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- POC 功能邊界 -->
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-5">
+      <h3 class="text-sm font-semibold text-amber-800 mb-3">POC 功能邊界說明</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs text-amber-900">
+        <div>
+          <p class="font-semibold mb-1.5">本版本已涵蓋（純規則，零 API 費用）</p>
+          <ul class="space-y-1 text-amber-800">
+            <li>✅ 文件完整性（4 條）</li>
+            <li>✅ 審議資料表欄位核對（3 條）</li>
+            <li>✅ 停車位與容積數值計算驗算（4 條）</li>
+            <li>✅ 個資風險掃描（Regex）</li>
+            <li>✅ 法定用詞錯誤清單比對（15 個詞）</li>
+            <li>✅ 審議資料表 vs 主文數字一致性</li>
+          </ul>
+        </div>
+        <div>
+          <p class="font-semibold mb-1.5">需要 LLM 才能擴充的項目（未來版本）</p>
+          <ul class="space-y-1 text-amber-700">
+            <li>⬜ 真實錯別字偵測（上下文語意）</li>
+            <li>⬜ 各章節敘述邏輯一致性</li>
+            <li>⬜ 容積獎勵各項加總自動核算</li>
+            <li>⬜ 公聽會記錄完整性</li>
+            <li>⬜ 權利變換試算比例驗算</li>
+            <li>⬜ 掃描式 PDF（需 OCR）</li>
+          </ul>
+        </div>
+      </div>
+      <p class="mt-3 text-xs text-amber-700 border-t border-amber-200 pt-3">
+        本系統為初步篩查工具，標記的問題仍需人工確認。最終審查結論以人工判斷為準。
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+  function showFiles(input) {
+    const list = document.getElementById('fileList');
+    const btn = document.getElementById('submitBtn');
+    list.innerHTML = '';
+    list.classList.toggle('hidden', input.files.length === 0);
+
+    Array.from(input.files).forEach(file => {
+      const size = (file.size / 1024 / 1024).toFixed(1);
+      const div = document.createElement('div');
+      div.className = 'flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm';
+      div.innerHTML = `<span class="text-blue-600">📄</span><span class="flex-1 text-gray-700 truncate">${file.name}</span><span class="text-gray-400">${size} MB</span>`;
+      list.appendChild(div);
+    });
+
+    btn.disabled = input.files.length === 0;
+  }
+
+  document.getElementById('uploadForm').addEventListener('submit', () => {
+    document.getElementById('submitBtn').disabled = true;
+    document.getElementById('progress').classList.remove('hidden');
+  });
+
+  // Drag and drop support
+  const zone = document.getElementById('dropZone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('border-blue-500', 'bg-blue-50'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('border-blue-500', 'bg-blue-50'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('border-blue-500', 'bg-blue-50');
+    const input = document.getElementById('fileInput');
+    input.files = e.dataTransfer.files;
+    showFiles(input);
+  });
+</script>
+</body>
+</html>

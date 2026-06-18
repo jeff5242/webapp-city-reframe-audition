@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>都市更新審查報告</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print { .no-print { display: none; } }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+
+<div class="max-w-5xl mx-auto px-4 py-8">
+
+  <!-- Header -->
+  <div class="bg-blue-800 text-white rounded-xl px-8 py-6 mb-6">
+    <div class="flex justify-between items-start">
+      <div>
+        <p class="text-blue-200 text-sm mb-1">臺北市都市更新審議自動審查報告</p>
+        <h1 class="text-xl font-bold leading-snug">{{ report.case_name }}</h1>
+      </div>
+      <div class="text-right text-sm text-blue-200">
+        <p>審查版本：{{ report.rule_version }}</p>
+        <p>審查時間：{{ report.audit_time }}</p>
+      </div>
+    </div>
+    <div class="mt-4 flex flex-wrap gap-2 text-xs">
+      {% for doc in report.documents %}
+      <span class="bg-blue-700 rounded px-2 py-1">📄 {{ doc }}</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Summary Stats -->
+  <div class="grid grid-cols-4 gap-4 mb-6">
+    <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+      <p class="text-3xl font-bold text-red-600">{{ report.critical_fails | length }}</p>
+      <p class="text-sm text-red-700 mt-1">🔴 嚴重缺失</p>
+    </div>
+    <div class="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
+      <p class="text-3xl font-bold text-orange-500">{{ report.high_fails | length }}</p>
+      <p class="text-sm text-orange-700 mt-1">🟠 高風險問題</p>
+    </div>
+    <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
+      <p class="text-3xl font-bold text-yellow-600">{{ report.warnings | length }}</p>
+      <p class="text-sm text-yellow-700 mt-1">⚠️ 需確認項目</p>
+    </div>
+    <div class="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+      <p class="text-3xl font-bold text-green-600">{{ report.passes | length }}</p>
+      <p class="text-sm text-green-700 mt-1">✅ 通過項目</p>
+    </div>
+  </div>
+
+  <!-- Findings -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+    <div class="px-6 py-4 border-b border-gray-100">
+      <h2 class="font-semibold text-gray-700">審查結果明細</h2>
+    </div>
+    <div class="divide-y divide-gray-100">
+      {% set severity_order = ['critical', 'high', 'medium', 'low', 'info'] %}
+      {% for finding in sorted_findings %}
+      {% set status_config = {
+        'fail': {'bg': 'bg-red-50', 'border': 'border-red-300', 'badge': 'bg-red-100 text-red-700', 'icon': '🔴'},
+        'warn': {'bg': 'bg-yellow-50', 'border': 'border-yellow-300', 'badge': 'bg-yellow-100 text-yellow-700', 'icon': '⚠️'},
+        'pass': {'bg': 'bg-green-50', 'border': 'border-green-200', 'badge': 'bg-green-100 text-green-700', 'icon': '✅'},
+        'skip': {'bg': 'bg-gray-50', 'border': 'border-gray-200', 'badge': 'bg-gray-100 text-gray-500', 'icon': '⏭'},
+      } %}
+      {% set cfg = status_config.get(finding.status, status_config['skip']) %}
+      <div class="px-6 py-4 {{ cfg.bg }} border-l-4 {{ cfg.border }}">
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-lg">{{ cfg.icon }}</span>
+              <span class="font-medium text-gray-800">{{ finding.rule_name }}</span>
+              <span class="text-xs font-mono {{ cfg.badge }} px-2 py-0.5 rounded-full">{{ finding.rule_id }}</span>
+              {% if finding.severity == 'critical' %}
+              <span class="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full">必修</span>
+              {% elif finding.severity == 'high' %}
+              <span class="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full">重要</span>
+              {% endif %}
+            </div>
+            <p class="text-sm text-gray-700 ml-7">{{ finding.message }}</p>
+            {% if finding.evidence %}
+            <p class="text-xs text-gray-500 ml-7 mt-1">📍 {{ finding.evidence }}</p>
+            {% endif %}
+            {% if finding.reference %}
+            <p class="text-xs text-gray-400 ml-7 mt-0.5">法源：{{ finding.reference }}</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- PII Risks -->
+  {% if report.pii_risks %}
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+    <div class="px-6 py-4 border-b border-gray-100">
+      <h2 class="font-semibold text-gray-700">個資風險偵測（前 15 頁）</h2>
+    </div>
+    <div class="px-6 py-4">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-gray-500 border-b">
+            <th class="pb-2 w-12">頁碼</th>
+            <th class="pb-2 w-24">類型</th>
+            <th class="pb-2 w-20">風險</th>
+            <th class="pb-2">內容</th>
+            <th class="pb-2">前後文</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for risk in report.pii_risks %}
+          <tr class="{% if risk.severity == 'HIGH' %}bg-red-50{% elif risk.severity == 'MEDIUM' %}bg-yellow-50{% endif %}">
+            <td class="py-2 text-gray-500">P.{{ risk.page }}</td>
+            <td class="py-2">{{ risk.risk_type }}</td>
+            <td class="py-2">
+              {% if risk.severity == 'HIGH' %}
+              <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">高風險</span>
+              {% else %}
+              <span class="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">中風險</span>
+              {% endif %}
+            </td>
+            <td class="py-2 font-mono text-gray-800">{{ risk.value }}</td>
+            <td class="py-2 text-gray-500 text-xs">{{ risk.context[:60] }}{% if risk.context | length > 60 %}...{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Extracted Data -->
+  {% if report.review_table %}
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+    <div class="px-6 py-4 border-b border-gray-100">
+      <h2 class="font-semibold text-gray-700">審議資料表萃取結果
+        <span class="text-xs font-normal text-gray-400 ml-2">第 {{ report.review_table.raw_page }} 頁</span>
+      </h2>
+    </div>
+    <div class="px-6 py-4">
+      <dl class="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
+        {% set rt = report.review_table %}
+        {% macro row(label, value, highlight=False) %}
+        <div>
+          <dt class="text-gray-500">{{ label }}</dt>
+          <dd class="font-medium {% if highlight and value %}text-red-600{% else %}text-gray-800{% endif %}">
+            {{ value if value is not none else '—' }}
+          </dd>
+        </div>
+        {% endmacro %}
+        {{ row('實施者', rt.implementer) }}
+        {{ row('統一編號', rt.implementer_id) }}
+        {{ row('送審類別', rt.submission_type) }}
+        {{ row('填表日期', rt.fill_date) }}
+        {{ row('容積獎勵申請額度', (rt.bonus_floor_area | round(2) | string + ' m²') if rt.bonus_floor_area is not none else None,
+               highlight=(rt.bonus_floor_area and rt.bonus_limit and rt.bonus_floor_area > rt.bonus_limit)) }}
+        {{ row('容積獎勵上限', (rt.bonus_limit | round(2) | string + ' m²') if rt.bonus_limit is not none else None) }}
+        {{ row('法定停車位', (rt.legal_parking | string + ' 輛') if rt.legal_parking is not none else None) }}
+        {{ row('無障礙停車位', (rt.accessible_parking | string + ' 輛') if rt.accessible_parking is not none else None,
+               highlight=(rt.legal_parking is not none and rt.legal_parking <= 50 and rt.accessible_parking is not none and rt.accessible_parking < 1)) }}
+        {{ row('充電車位', (rt.ev_parking | string + ' 輛') if rt.ev_parking is not none else None) }}
+        {{ row('土地所有權人同意比率', (rt.owner_consent_ratio | string + '%') if rt.owner_consent_ratio is not none else None) }}
+      </dl>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Footer -->
+  <div class="text-center text-xs text-gray-400 mt-8 no-print">
+    <p>本報告由自動審查系統產生，僅供初步篩查參考，最終審查結論仍需人工確認。</p>
+    <button onclick="window.print()" class="mt-2 text-blue-500 underline">列印 / 儲存 PDF</button>
+  </div>
+
+</div>
+</body>
+</html>
