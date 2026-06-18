@@ -39,7 +39,12 @@ init_db()
 
 @app.get("/health")
 async def health() -> JSONResponse:
-    return JSONResponse({"status": "ok"})
+    return JSONResponse({
+        "status": "ok",
+        "templates_dir": str(_TEMPLATES_DIR),
+        "templates_exists": _TEMPLATES_DIR.exists(),
+        "upload_html_exists": (_TEMPLATES_DIR / "upload.html").exists(),
+    })
 
 
 @app.get("/", response_class=HTMLResponse)
