@@ -14,6 +14,7 @@ from .extractors.term_checker import extract_number_contexts, scan_for_wrong_ter
 from .models import AuditData, AuditReport
 from .reporters.html_reporter import generate_report
 from .rules.engine import build_default_engine
+from .version_selector import select_version
 
 app = FastAPI(
     title="臺北市都市更新審議自動審查",
@@ -93,10 +94,13 @@ async def audit(
             else pdf_files[0].filename or "未知案件"
         )
 
+        fill_date = review_table.fill_date if review_table else None
+        reg_version, _ = select_version(fill_date)
+
         report = AuditReport(
             case_name=case_name,
             audit_time=datetime.now().strftime("%Y-%m-%d %H:%M"),
-            rule_version="111年版",
+            rule_version=reg_version.label,
             documents=[f.filename or "" for f in pdf_files],
             review_table=review_table,
             front_docs=front_docs,
