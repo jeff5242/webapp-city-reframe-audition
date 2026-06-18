@@ -1,0 +1,143 @@
+version: "108年版"
+year: 108
+effective_date: "2019-01-30"
+end_date: "2022-03-23"
+source_laws:
+  - "都市更新條例（108年01月30日全面修正版）"
+  - "臺北市都市更新自治條例（108年版）"
+  - "臺北市都市更新建築容積獎勵辦法（修正版）"
+revision_from: "107年版"
+revision_summary: "配合108年1月30日施行之新版都市更新條例全面修正，重大結構性變更；新增聽證程序、強化同意書規定、修正自行劃定更新單元程序"
+
+key_revisions:
+  - id: 1
+    category: "整體架構"
+    title: "配合新都更條例全面修正計畫書格式與章節"
+    type: "major_rewrite"
+    impact: "critical"
+    reference: "都市更新條例（108年版）全文"
+    note: "108年版是繼106年原始版後最大規模修訂，幾乎所有章節均受影響"
+  - id: 2
+    category: "自行劃定更新單元"
+    title: "新增「自行劃定更新單元」程序要求（都更條例第11條）"
+    type: "new"
+    impact: "major"
+    reference: "都市更新條例第11條"
+    note: "舊法下更新單元以主管機關核定為主；新法允許由實施者提出，附相關檢討書"
+  - id: 3
+    category: "同意書規定"
+    title: "同意比率計算方式修正，新增按所有人數計算要求"
+    type: "amendment"
+    impact: "major"
+    reference: "都市更新條例第37條"
+    note: "需同時符合土地面積比 ≥ 3/4 及所有人數比 ≥ 3/4（已重建區段要求）"
+  - id: 4
+    category: "聽證程序"
+    title: "新增聽證程序（都更條例第32條）為必要程序"
+    type: "new"
+    impact: "major"
+    reference: "都市更新條例第32條"
+    note: "107年版無聽證程序要求，108年版起為法定必要程序"
+  - id: 5
+    category: "事業概要"
+    title: "事業概要計畫書由「可選」改為「部分案件必附」"
+    type: "amendment"
+    impact: "medium"
+    reference: "都市更新條例第23條"
+  - id: 6
+    category: "公聽會"
+    title: "公聽會公告方式新增電子公告管道"
+    type: "amendment"
+    impact: "minor"
+    reference: "都市更新條例第30條"
+  - id: 7
+    category: "容積獎勵計算"
+    title: "容積獎勵上限計算基準改為「基準容積」（非法定容積）"
+    type: "amendment"
+    impact: "major"
+    reference: "都市更新條例第65條（108年版）"
+    note: "107年版用「法定容積 × 50%」；108年版改為「基準容積 × 50%」"
+  - id: 8
+    category: "財務計畫"
+    title: "新增協議合建財務計畫格式；修正營業稅提列公式"
+    type: "amendment"
+    impact: "medium"
+  - id: 9
+    category: "附錄"
+    title: "附錄新增聽證相關資料（附錄十八）"
+    type: "new"
+    impact: "medium"
+  - id: 10
+    category: "附錄"
+    title: "附錄二修正：更新單元核准函或自行劃定更新單元檢討書"
+    type: "amendment"
+    impact: "major"
+
+technical_rules:
+  accessible_parking:
+    formula: "法定停車位 ≤ 50 輛 → 設 1 輛；51-300輛：1+(n-50)÷50（取整）；>300輛：更嚴格要求"
+    reference: "建築技術規則第167條之六"
+  bonus_limit:
+    formula: "基準容積 × 50%"
+    note: "108年版起改用「基準容積」為計算基準（重要改變！107年版為「法定容積」）"
+    reference: "都市更新條例第65條（108年版）"
+  consent_ratio:
+    land_area: "土地面積同意比率 ≥ 3/4"
+    owner_count: "土地所有人數同意比率 ≥ 3/4"
+    building_area: "合法建築物面積同意比率 ≥ 3/4"
+    building_owner: "合法建築物所有人數同意比率 ≥ 3/4"
+    reference: "都市更新條例第37條（108年版）"
+    note: "108年版新增所有人數比率要求，需同時符合面積比及人數比"
+  public_hearing:
+    required: true
+    notice_period: "30天前公告"
+    newspaper: "報紙刊登（108年起可加電子公告）"
+  formal_hearing:
+    required: true
+    note: "108年版新增聽證程序，為重大變化"
+    reference: "都市更新條例第32條"
+
+form_fields:
+  - name: "案名"
+    status: "existing"
+  - name: "實施者"
+    status: "existing"
+  - name: "送審類別（A-1/B-1/B-2/C/D）"
+    status: "existing"
+  - name: "填表日期"
+    status: "existing"
+  - name: "土地面積"
+    status: "existing"
+  - name: "基準容積"
+    status: "updated"
+    note: "108年版起改用「基準容積」取代「法定容積」作為計算基礎"
+  - name: "法定停車位"
+    status: "existing"
+  - name: "無障礙停車位"
+    status: "existing"
+  - name: "充電停車位"
+    status: "not_exist"
+    note: "108年版尚無此欄位，111年版新增"
+  - name: "自行劃定更新單元說明"
+    status: "new"
+    note: "108年版新增，依都更條例第11條"
+
+doc_structure:
+  front_docs:
+    - "都市更新事業計畫申請書"
+    - "切結書"
+    - "委託書"
+    - "臺北市都市更新審議資料表"
+    - "歷次會議紀錄回應綜理表"
+  main_chapters: 18
+  appendices: 23
+  note: "較107年版增加附錄一項（聽證相關資料，附錄十八）"
+
+formatting:
+  paper: "A3 橫式雙面"
+  binding: "左側短邊裝訂"
+  color_print: "標示彩色，其餘黑白"
+  seal_required: "申請書、切結書、委託書、審議資料表"
+
+data_confidence: "high"
+note: "108年版對應新都更條例（108年1月30日施行），是都更法制重大里程碑"

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>臺北市都市更新法規 Wiki — 版本對照</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+
+<div class="max-w-6xl mx-auto px-4 py-8">
+
+  <!-- Header -->
+  <div class="bg-blue-900 text-white rounded-xl px-8 py-6 mb-6">
+    <p class="text-blue-300 text-sm mb-1">臺北市都市更新處</p>
+    <h1 class="text-2xl font-bold">法規版本 Wiki</h1>
+    <p class="text-blue-200 text-sm mt-1">臺北市都市更新事業及權利變換計畫書範本 · 107 / 108 / 111 / 113 年版對照</p>
+    <div class="mt-3 flex gap-3 flex-wrap">
+      {% for v in wiki.versions %}
+      <button onclick="showTab('v{{ v.year }}')"
+              id="tab-v{{ v.year }}"
+              class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium border border-blue-400 text-blue-200 hover:bg-blue-700 transition-colors">
+        {{ v.version }}
+      </button>
+      {% endfor %}
+      <button onclick="showTab('diff')"
+              id="tab-diff"
+              class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium border border-indigo-400 text-indigo-200 hover:bg-indigo-800 transition-colors">
+        年度差異 Diff
+      </button>
+      <a href="/" class="ml-auto px-4 py-1.5 rounded-full text-sm text-blue-300 hover:text-white border border-blue-600 hover:border-blue-400 transition-colors">
+        ← 返回審查
+      </a>
+    </div>
+  </div>
+
+  <!-- Version Tabs -->
+  {% for v in wiki.versions %}
+  <div id="panel-v{{ v.year }}" class="tab-panel hidden">
+
+    <!-- Version Header -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-4">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h2 class="text-xl font-bold text-gray-900">{{ v.version }}</h2>
+          <p class="text-gray-500 text-sm mt-1">{{ v.revision_summary }}</p>
+        </div>
+        <div class="text-right text-sm shrink-0">
+          <p class="text-gray-600">施行日期 <span class="font-medium text-gray-900">{{ v.effective_date }}</span></p>
+          {% if v.end_date %}
+          <p class="text-gray-400 text-xs">截止 {{ v.end_date }}</p>
+          {% else %}
+          <span class="inline-block mt-1 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">現行版本</span>
+          {% endif %}
+          <p class="text-gray-400 text-xs mt-1">前版：{{ v.revision_from }}</p>
+        </div>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2 text-xs">
+        {% for law in v.source_laws %}
+        <span class="bg-blue-50 text-blue-700 px-2 py-1 rounded">{{ law }}</span>
+        {% endfor %}
+      </div>
+      {% if v.data_confidence != 'high' %}
+      <div class="mt-3 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2 text-sm text-yellow-800">
+        ⚠️ 部分內容 {{ v.get('note', '待原始文件確認') }}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Key Revisions -->
+    {% if v.key_revisions %}
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4">
+      <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 rounded-t-xl">
+        <h3 class="font-semibold text-gray-700">本版修訂重點（相較前版）</h3>
+        <p class="text-xs text-gray-400 mt-0.5">共 {{ v.key_revisions | length }} 項</p>
+      </div>
+      <div class="divide-y divide-gray-100">
+        {% for rev in v.key_revisions %}
+        <div class="px-6 py-3 flex items-start gap-3">
+          <span class="text-xs text-gray-400 w-5 shrink-0 mt-0.5">{{ rev.id }}</span>
+          <div class="flex-1 min-w-0">
+            <div class="flex flex-wrap items-center gap-1.5 mb-1">
+              <span class="text-xs text-gray-500">{{ rev.category }}</span>
+              <span class="text-xs {{ rev.type_badge[0] }} px-1.5 py-0.5 rounded">{{ rev.type_badge[1] }}</span>
+              {% if rev.data_confidence is defined and rev.data_confidence != 'high' %}
+              <span class="text-xs {{ rev.conf_badge[0] }} px-1.5 py-0.5 rounded">{{ rev.conf_badge[1] }}</span>
+              {% endif %}
+            </div>
+            <p class="text-sm text-gray-800">{{ rev.title }}</p>
+            {% if rev.reference is defined %}
+            <p class="text-xs text-gray-400 mt-0.5">法源：{{ rev.reference }}</p>
+            {% endif %}
+            {% if rev.note is defined %}
+            <p class="text-xs text-blue-500 mt-0.5">💡 {{ rev.note }}</p>
+            {% endif %}
+          </div>
+          {% if rev.impact == 'major' or rev.impact == 'critical' %}
+          <span class="shrink-0 text-xs {% if rev.impact == 'critical' %}bg-red-100 text-red-700{% else %}bg-orange-100 text-orange-700{% endif %} px-2 py-0.5 rounded-full">{{ rev.impact }}</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Technical Rules -->
+    {% if v.technical_rules %}
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4">
+      <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 rounded-t-xl">
+        <h3 class="font-semibold text-gray-700">技術規則 / 計算公式</h3>
+      </div>
+      <div class="px-6 py-4">
+        <dl class="space-y-4 text-sm">
+          {% for key, rule in v.technical_rules.items() %}
+          {% if rule is mapping %}
+          <div class="border-l-2 border-blue-200 pl-4">
+            <dt class="font-medium text-gray-700 mb-1">
+              {% if key == 'accessible_parking' %}無障礙停車位
+              {% elif key == 'ev_parking' %}充電車位
+              {% elif key == 'bonus_limit' %}容積獎勵上限
+              {% elif key == 'consent_ratio' %}同意比率
+              {% elif key == 'public_hearing' %}公聽會
+              {% elif key == 'formal_hearing' %}聽證程序
+              {% else %}{{ key }}{% endif %}
+            </dt>
+            {% if rule.formula is defined %}
+            <dd class="font-mono text-xs bg-gray-50 rounded px-2 py-1 text-gray-800 mb-1">{{ rule.formula }}</dd>
+            {% endif %}
+            {% if rule.land_area is defined %}
+            <dd class="text-gray-600 text-xs">土地面積比：{{ rule.land_area }}</dd>
+            {% endif %}
+            {% if rule.owner_count is defined %}
+            <dd class="text-gray-600 text-xs">所有人數比：{{ rule.owner_count }}</dd>
+            {% endif %}
+            {% if rule.building_area is defined %}
+            <dd class="text-gray-600 text-xs">建築物面積比：{{ rule.building_area }}</dd>
+            {% endif %}
+            {% if rule.building_owner is defined %}
+            <dd class="text-gray-600 text-xs">建築物所有人數比：{{ rule.building_owner }}</dd>
+            {% endif %}
+            {% if rule.required is defined %}
+            <dd class="text-gray-600 text-xs">必要程序：{% if rule.required %}✅ 是{% else %}❌ 否{% endif %}</dd>
+            {% endif %}
+            {% if rule.note is defined %}
+            <dd class="text-xs text-blue-500 mt-1">💡 {{ rule.note }}</dd>
+            {% endif %}
+            {% if rule.reference is defined %}
+            <dd class="text-xs text-gray-400">法源：{{ rule.reference }}</dd>
+            {% endif %}
+          </div>
+          {% endif %}
+          {% endfor %}
+        </dl>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Form Fields -->
+    {% if v.form_fields %}
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4">
+      <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 rounded-t-xl">
+        <h3 class="font-semibold text-gray-700">審議資料表欄位</h3>
+      </div>
+      <div class="px-6 py-4">
+        <div class="flex flex-wrap gap-2">
+          {% for field in v.form_fields %}
+          <div class="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs">
+            <span class="{{ field.status_badge[0] }} px-1.5 py-0.5 rounded text-xs">{{ field.status_badge[1] }}</span>
+            <span class="text-gray-700">{{ field.name }}</span>
+            {% if field.note is defined %}
+            <span class="text-gray-400">— {{ field.note }}</span>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Doc Structure -->
+    {% if v.doc_structure %}
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4">
+      <div class="px-6 py-4 border-b border-gray-100 bg-gray-50 rounded-t-xl">
+        <h3 class="font-semibold text-gray-700">計畫書結構</h3>
+      </div>
+      <div class="px-6 py-4 text-sm">
+        <div class="grid grid-cols-3 gap-4">
+          <div class="text-center bg-gray-50 rounded-lg p-4">
+            <p class="text-3xl font-bold text-blue-700">{{ v.doc_structure.main_chapters }}</p>
+            <p class="text-gray-500 text-xs mt-1">主文章數</p>
+          </div>
+          <div class="text-center bg-gray-50 rounded-lg p-4">
+            <p class="text-3xl font-bold text-indigo-700">{{ v.doc_structure.appendices }}</p>
+            <p class="text-gray-500 text-xs mt-1">附錄數量</p>
+          </div>
+          <div class="text-center bg-gray-50 rounded-lg p-4">
+            <p class="text-xl font-bold text-gray-700">{{ v.doc_structure.front_docs | length }}</p>
+            <p class="text-gray-500 text-xs mt-1">前置文件種類</p>
+          </div>
+        </div>
+        {% if v.doc_structure.note %}
+        <p class="text-xs text-gray-400 mt-3">{{ v.doc_structure.note }}</p>
+        {% endif %}
+        <div class="mt-3 flex flex-wrap gap-2">
+          {% for doc in v.doc_structure.front_docs %}
+          <span class="bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded">{{ doc }}</span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Official Source Link -->
+    {% if v.source_url is defined %}
+    <div class="text-center text-xs text-gray-400 mt-4">
+      資料來源：臺北市都市更新處
+      <a href="{{ v.source_url }}" target="_blank" class="text-blue-500 underline ml-1">官方下載頁面</a>
+    </div>
+    {% endif %}
+
+  </div>
+  {% endfor %}
+
+  <!-- Diff Panel -->
+  <div id="panel-diff" class="tab-panel hidden">
+    <div class="space-y-6">
+      {% for diff in wiki.diffs %}
+      <div class="bg-white rounded-xl shadow-sm border border-indigo-200 overflow-hidden">
+
+        <!-- Diff Header -->
+        <div class="bg-indigo-50 px-6 py-4 border-b border-indigo-100">
+          <div class="flex items-center gap-3">
+            <span class="font-bold text-indigo-800 text-lg">{{ diff.from_version }}</span>
+            <span class="text-indigo-400 text-xl">→</span>
+            <span class="font-bold text-indigo-900 text-lg">{{ diff.to_version }}</span>
+            <span class="text-xs text-indigo-400 ml-auto">{{ diff.from_date }} → {{ diff.to_date }}</span>
+          </div>
+          <p class="text-sm text-indigo-700 mt-1">{{ diff.revision_summary }}</p>
+        </div>
+
+        <!-- Revision Changes -->
+        {% if diff.key_revisions %}
+        <div class="border-b border-gray-100">
+          <div class="px-6 py-3 bg-gray-50">
+            <h4 class="text-sm font-semibold text-gray-600">修訂重點 ({{ diff.key_revisions | length }} 項)</h4>
+          </div>
+          <div class="divide-y divide-gray-50">
+            {% for rev in diff.key_revisions %}
+            <div class="px-6 py-2.5 flex items-start gap-3 hover:bg-gray-50 transition-colors">
+              <span class="text-xs text-gray-400 w-5 shrink-0 mt-0.5">{{ rev.id }}</span>
+              <div class="flex-1 min-w-0">
+                <div class="flex flex-wrap items-center gap-1.5 mb-0.5">
+                  <span class="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{{ rev.category }}</span>
+                  <span class="text-xs {{ rev.type_badge[0] }} px-1.5 py-0.5 rounded">{{ rev.type_badge[1] }}</span>
+                </div>
+                <p class="text-sm text-gray-800">{{ rev.title }}</p>
+              </div>
+              {% if rev.impact == 'major' or rev.impact == 'critical' %}
+              <span class="shrink-0 text-xs {% if rev.impact == 'critical' %}bg-red-100 text-red-700{% else %}bg-orange-100 text-orange-700{% endif %} px-2 py-0.5 rounded-full">{{ rev.impact }}</span>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Field Changes -->
+        {% if diff.field_changes %}
+        <div class="border-b border-gray-100">
+          <div class="px-6 py-3 bg-gray-50">
+            <h4 class="text-sm font-semibold text-gray-600">審議資料表欄位異動</h4>
+          </div>
+          <div class="px-6 py-3 flex flex-wrap gap-2">
+            {% for fc in diff.field_changes %}
+            <div class="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs">
+              <span class="{{ fc.badge[0] }} px-1.5 py-0.5 rounded">{{ fc.badge[1] }}</span>
+              <span class="text-gray-700">{{ fc.name }}</span>
+              {% if fc.note %}
+              <span class="text-gray-400">— {{ fc.note }}</span>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Rule Changes -->
+        {% if diff.rule_changes %}
+        <div class="border-b border-gray-100">
+          <div class="px-6 py-3 bg-gray-50">
+            <h4 class="text-sm font-semibold text-gray-600">技術規則異動</h4>
+          </div>
+          <div class="divide-y divide-gray-50">
+            {% for rc in diff.rule_changes %}
+            <div class="px-6 py-2.5">
+              <p class="text-xs text-gray-500 font-medium mb-1">{{ rc.key }}</p>
+              {% if rc.prev %}
+              <p class="text-xs text-red-400 line-through">{{ rc.prev }}</p>
+              {% endif %}
+              <p class="text-xs text-green-700 font-mono bg-green-50 rounded px-2 py-0.5 mt-0.5">{{ rc.curr }}</p>
+              {% if rc.note %}
+              <p class="text-xs text-blue-500 mt-0.5">💡 {{ rc.note }}</p>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Structural Changes -->
+        {% if diff.struct_changes %}
+        <div class="px-6 py-3">
+          <h4 class="text-sm font-semibold text-gray-600 mb-2">結構異動</h4>
+          {% for sc in diff.struct_changes %}
+          <p class="text-xs text-gray-600">📐 {{ sc }}</p>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const panels = document.querySelectorAll('.tab-panel');
+  const tabs = document.querySelectorAll('.tab-btn');
+
+  function showTab(id) {
+    panels.forEach(p => p.classList.add('hidden'));
+    tabs.forEach(t => {
+      t.classList.remove('bg-white', 'text-blue-900', 'border-white');
+      t.classList.add('text-blue-200');
+    });
+    const panel = document.getElementById('panel-' + id);
+    const tab = document.getElementById('tab-' + id);
+    if (panel) panel.classList.remove('hidden');
+    if (tab) {
+      tab.classList.remove('text-blue-200', 'text-indigo-200');
+      tab.classList.add('bg-white', 'text-blue-900', 'border-white');
+    }
+  }
+
+  // Default: show newest version
+  showTab('v{{ wiki.versions[-1].year }}');
+</script>
+</body>
+</html>
