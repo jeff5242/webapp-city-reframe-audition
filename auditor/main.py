@@ -49,7 +49,11 @@ async def health() -> JSONResponse:
 
 @app.get("/", response_class=HTMLResponse)
 async def upload_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("upload.html", {"request": request})
+    try:
+        return templates.TemplateResponse("upload.html", {"request": request})
+    except Exception as exc:
+        import traceback
+        return HTMLResponse(f"<pre>ERROR: {exc}\n{traceback.format_exc()}</pre>", status_code=500)
 
 
 @app.get("/download/{key}")
