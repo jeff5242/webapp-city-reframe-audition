@@ -17,7 +17,8 @@ RUN pip install --no-cache-dir \
     "pyyaml>=6.0" \
     "jinja2>=3.1.0" \
     "python-multipart>=0.0.9" \
-    "anthropic>=0.40.0"
+    "anthropic>=0.40.0" \
+    "pymupdf>=1.23.0"
 
 # Copy source (after deps so source changes don't bust dep cache)
 COPY . .
