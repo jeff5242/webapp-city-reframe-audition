@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 
 from .annotator import annotate_pdf
 from .extractors.front_docs import extract_front_docs
+from .wiki import load_all_wiki
 from .extractors.review_table import extract_review_table
 from .extractors.term_checker import extract_number_contexts, scan_for_wrong_terms
 from .models import AuditData, AuditReport, FindingDiff
@@ -45,6 +46,12 @@ async def health() -> JSONResponse:
 @app.get("/", response_class=HTMLResponse)
 async def upload_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "upload.html")
+
+
+@app.get("/wiki", response_class=HTMLResponse)
+async def wiki_page(request: Request) -> HTMLResponse:
+    data = load_all_wiki()
+    return templates.TemplateResponse(request, "wiki.html", {"wiki": data})
 
 
 @app.get("/download/{key}")

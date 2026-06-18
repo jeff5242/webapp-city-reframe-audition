@@ -1,0 +1,110 @@
+version: "113年版"
+year: 113
+effective_date: "2024-12-03"
+end_date: null
+source_laws:
+  - "都市更新條例（最新修正版）"
+  - "臺北市都市更新自治條例（113年版）"
+  - "臺北市都市更新建築容積獎勵辦法（113年版）"
+revision_from: "111年版"
+revision_summary: "最新版本（2024年12月施行），具體修訂內容待完整分析；初步確認新增公辦都更相關規定及綠建築要求更新"
+
+key_revisions:
+  - id: 1
+    category: "申請書 / 切結書 / 委託書"
+    title: "更新公辦都更相關注意事項與說明欄位"
+    type: "amendment"
+    impact: "minor"
+    data_confidence: "medium"
+  - id: 2
+    category: "容積獎勵"
+    title: "容積獎勵辦法修正，調整部分獎勵項目上限或計算方式"
+    type: "amendment"
+    impact: "medium"
+    reference: "臺北市都市更新建築容積獎勵辦法（113年版）"
+    data_confidence: "medium"
+    note: "待取得113年版範本後精確補充"
+  - id: 3
+    category: "綠建築"
+    title: "綠建築/智慧建築要求更新，配合最新評分標準"
+    type: "amendment"
+    impact: "minor"
+    data_confidence: "medium"
+  - id: 4
+    category: "審議資料表"
+    title: "欄位調整，部分外審程序說明方式修正"
+    type: "amendment"
+    impact: "minor"
+    data_confidence: "low"
+    note: "待確認：依URO官方公告確認實際欄位變動"
+  - id: 5
+    category: "財務計畫"
+    title: "估價費用計算公式配合估價師公會費率更新"
+    type: "amendment"
+    impact: "minor"
+    data_confidence: "low"
+    note: "待確認"
+
+technical_rules:
+  accessible_parking:
+    formula: "同111年版：停車位 ≤ 50 輛 → 1 輛；51-300輛 → 1+⌈(n-50)/50⌉輛；>300輛 → 6+⌈(n-300)/100⌉輛"
+    reference: "建築技術規則第167條之六"
+    data_confidence: "high"
+  ev_parking:
+    formula: "審議資料表需填報，具體最低要求待確認113年版是否有修訂"
+    data_confidence: "medium"
+  bonus_limit:
+    formula: "基準容積 × 50%（基礎規定，具體項目可能有調整）"
+    reference: "都市更新條例第65條（113年版）"
+    data_confidence: "medium"
+    note: "113年版具體數字待原始文件確認"
+  consent_ratio:
+    land_area: "土地面積同意比率 ≥ 3/4（同111年版）"
+    owner_count: "土地所有人數同意比率 ≥ 3/4（同111年版）"
+    building_area: "合法建築物面積同意比率 ≥ 3/4（同111年版）"
+    building_owner: "合法建築物所有人數同意比率 ≥ 3/4（同111年版）"
+    reference: "都市更新條例第37條"
+    data_confidence: "high"
+
+form_fields:
+  - name: "案名"
+    status: "existing"
+  - name: "實施者"
+    status: "existing"
+  - name: "送審類別（A-1/B-1/B-2/C/D）"
+    status: "existing"
+  - name: "填表日期"
+    status: "existing"
+  - name: "土地面積"
+    status: "existing"
+  - name: "基準容積"
+    status: "existing"
+  - name: "法定停車位"
+    status: "existing"
+  - name: "無障礙停車位"
+    status: "existing"
+  - name: "充電車位"
+    status: "existing"
+    note: "延續111年版"
+
+doc_structure:
+  front_docs:
+    - "都市更新事業計畫申請書"
+    - "切結書"
+    - "委託書"
+    - "臺北市都市更新審議資料表"
+    - "歷次會議紀錄回應綜理表"
+    - "修正內容對照表"
+  main_chapters: 18
+  appendices: 24
+  note: "基本架構同111年版，具體附錄內容待確認"
+
+formatting:
+  paper: "A3 橫式雙面"
+  binding: "左側短邊裝訂，封面紙 150磅以上"
+  color_print: "標示彩色，其餘黑白"
+  seal_required: "申請書、切結書、委託書、審議資料表"
+
+data_confidence: "medium"
+note: "113年版為現行最新版本（2024年12月施行）。本系統尚未完整分析113年原始文件，標記 data_confidence=low/medium 的欄位待取得原始範本後補充完整。"
+source_url: "https://uro.gov.taipei/News_Content.aspx?n=9CAC69257CFAC70E&sms=1635F69C7777535B&s=D10AC6C64702DCAA"

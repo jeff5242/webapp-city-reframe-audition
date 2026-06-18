@@ -1,0 +1,182 @@
+version: "111年版"
+year: 111
+effective_date: "2022-03-24"
+end_date: "2024-12-02"
+source_laws:
+  - "都市更新條例（最新修正版）"
+  - "臺北市都市更新自治條例（111年版）"
+  - "臺北市都市更新建築容積獎勵辦法（111年版）"
+revision_from: "108年版"
+revision_summary: "配合臺北市都市更新自治條例及實務執行檢討，進行14項修訂；新增充電車位、無障礙車位欄位，修正容積獎勵計算公式及財務計畫格式"
+
+key_revisions:
+  - id: 1
+    category: "申請書 / 切結書 / 委託書"
+    title: "新增公辦都更案注意事項提醒"
+    type: "amendment"
+    impact: "minor"
+  - id: 2
+    category: "審議資料表"
+    title: "新增無障礙車位欄位、充電車位欄位；需載明外審程序（都設、都計、文資、捷運影響評估）"
+    type: "new"
+    impact: "medium"
+  - id: 3
+    category: "更新單元範圍"
+    title: "位於公劃更新地區且符合自治條例第12條第4款，需依「臺北市畸零地使用自治條例」載明相鄰土地「業已建築完成」說明"
+    type: "amendment"
+    impact: "medium"
+    reference: "臺北市都市更新自治條例第12條第4款"
+  - id: 4
+    category: "辦理緣起 / 更新單元檢討書 / 附錄「更新單元核准函」"
+    title: "依自治條例第15條修正，新增範例及注意事項"
+    type: "amendment"
+    impact: "minor"
+    reference: "臺北市都市更新自治條例第15條"
+  - id: 5
+    category: "現況分析"
+    title: "無建物登記但有其他合法建築物證明者，需自行檢核有無登載；修正地上物拆遷計畫載明方式"
+    type: "amendment"
+    impact: "minor"
+  - id: 6
+    category: "申請容積獎勵項目及額度"
+    title: "依都更條例第65條修正獎勵上限；新增臺北市都更建築容積獎勵項目檢核表；建築設計圖說移至「建築興建計畫」章節；簡化建築師簽證表格"
+    type: "amendment"
+    impact: "major"
+    reference: "都市更新條例第65條（111年修訂）"
+  - id: 7
+    category: "財務計畫"
+    title: "修正營業稅提列公式；新增都更規劃費用/估價費用計算公式；新增協議合建財務計畫格式；事業計畫含權利變換時，需附核定事業計畫財務計畫成本說明對照"
+    type: "amendment"
+    impact: "major"
+  - id: 8
+    category: "都市設計審議"
+    title: "「臺北市都市設計審議報告書」部分圖說章節納入計畫書注意事項"
+    type: "amendment"
+    impact: "minor"
+  - id: 9
+    category: "人行步道面積檢討圖 / 一樓平面圖"
+    title: "新增標示公用設施突出物（燈桿、交通號誌桿、消防栓等）；共專用圖說補充充電車位、無障礙車位"
+    type: "amendment"
+    impact: "minor"
+  - id: 10
+    category: "產權登記清冊（權利變換計畫書）"
+    title: "擬請幹事機關提供意見後修正"
+    type: "amendment"
+    impact: "minor"
+  - id: 11
+    category: "同意書注意事項"
+    title: "依109年「受理都更案審查處理同意書重複出具及撤銷作業要點」新增注意事項；新增未填具完整所有權人權利價值比率提醒"
+    type: "amendment"
+    impact: "medium"
+    reference: "臺北市政府受理都市更新案審查與處理同意書重複出具及撤銷作業要點（109年）"
+  - id: 12
+    category: "公聽會登報方式"
+    title: "依都更條例第32條，新增「或新聞電子報」；附件新增「或新聞電子報證明」"
+    type: "amendment"
+    impact: "minor"
+    reference: "都市更新條例第32條"
+  - id: 13
+    category: "部分權利變換 / 部分協議合建案"
+    title: "審議資料表、財務計畫章節新增範例及修改注意事項"
+    type: "amendment"
+    impact: "medium"
+  - id: 14
+    category: "事業概要"
+    title: "新增附錄須檢附自辦公聽會相關資料"
+    type: "amendment"
+    impact: "medium"
+
+technical_rules:
+  accessible_parking:
+    formula: "停車位 ≤ 50 輛 → 1 輛；51-300輛 → 1+⌈(n-50)/50⌉輛；>300輛 → 6+⌈(n-300)/100⌉輛"
+    reference: "建築技術規則第167條之六"
+    since: "108年版即有，111年版審議資料表新增獨立欄位"
+  ev_parking:
+    formula: "無法定最低數量規定，但審議資料表需填報實際規劃數量"
+    reference: "111年版審議資料表修訂（新增欄位）"
+    since: "111年版新增欄位"
+  bonus_limit:
+    formula: "基準容積 × 50%"
+    reference: "都市更新條例第65條（111年版）"
+    note: "111年版延續108年版以「基準容積」計算；核驗項目檢核表為新增"
+  consent_ratio:
+    land_area: "土地面積同意比率 ≥ 3/4"
+    owner_count: "土地所有人數同意比率 ≥ 3/4"
+    building_area: "合法建築物面積同意比率 ≥ 3/4"
+    building_owner: "合法建築物所有人數同意比率 ≥ 3/4"
+    reference: "都市更新條例第37條"
+  public_hearing:
+    required: true
+    notice_period: "30天前公告"
+    newspaper: "報紙刊登或新聞電子報（111年版新增電子報選項）"
+  formal_hearing:
+    required: true
+    reference: "都市更新條例第32條"
+
+form_fields:
+  - name: "案名"
+    status: "existing"
+  - name: "實施者"
+    status: "existing"
+  - name: "送審類別（A-1/B-1/B-2/C/D）"
+    status: "existing"
+  - name: "填表日期"
+    status: "existing"
+  - name: "土地面積"
+    status: "existing"
+  - name: "基準容積"
+    status: "existing"
+  - name: "法定停車位"
+    status: "existing"
+  - name: "無障礙停車位"
+    status: "updated"
+    note: "111年版審議資料表新增獨立欄位（原附圖說，未獨立欄位）"
+  - name: "充電車位"
+    status: "new"
+    note: "111年版新增欄位"
+  - name: "外審程序說明"
+    status: "new"
+    note: "111年版新增，需說明是否需都設/都計/文資/捷運影響評估審議"
+
+doc_structure:
+  front_docs:
+    - "都市更新事業計畫申請書"
+    - "切結書"
+    - "委託書"
+    - "臺北市都市更新審議資料表"
+    - "歷次會議紀錄回應綜理表"
+    - "修正內容對照表"
+  main_chapters: 18
+  appendices: 24
+  note: "附錄共24項，較108年版多1項（111年版新增附錄二十四：都市更新事業計畫圖）"
+
+formatting:
+  paper: "A3 橫式雙面"
+  binding: "左側短邊裝訂，封面紙 150磅以上"
+  color_print: "標示彩色，其餘黑白"
+  seal_required: "申請書、切結書、委託書、審議資料表（需附用印之正本）"
+  number_format: "地段小段、道路名稱用國字；其他阿拉伯數字半形；千分位用逗號"
+  precision: "面積/百分比至小數第二位；金額四捨五入至整數位"
+
+pii_masking:
+  cloud_version:
+    - "歷次會議紀錄回應綜理表"
+    - "所有權人土地及合法建築物相關清冊"
+    - "其他土地改良物拆遷相關清冊"
+    - "所有權人權利價值表"
+    - "更新後建築分配單元及位置對照圖"
+    - "違章戶相關資料"
+    - "不參與分配名冊"
+    - "附錄（如實施者證明文件）"
+  paper_version:
+    - "歷次會議紀錄回應綜理表（人民陳情意見）"
+    - "附錄（如實施者證明文件）"
+  examples:
+    name: "陳○明"
+    phone: "091234****"
+    id_number: "E12345****"
+    address: "臺北市中山區南京路三段***號*樓"
+
+data_confidence: "high"
+note: "111年版為現行最常用版本，本系統規則引擎以此版為主要依據"
+source_url: "https://uro.gov.taipei/News_Content.aspx?n=9CAC69257CFAC70E&sms=1635F69C7777535B&s=D10AC6C64702DCAA"

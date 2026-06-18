@@ -1,0 +1,95 @@
+version: "107年版"
+year: 107
+effective_date: "2018-03-23"
+end_date: "2019-01-29"
+source_laws:
+  - "都市更新條例（97年01月23日版）"
+  - "臺北市都市更新自治條例"
+  - "臺北市都市更新建築容積獎勵辦法（修正前）"
+revision_from: "106年版"
+revision_summary: "配合規劃設計容積獎勵修正，新增建築設計相關要求；更新建築技術規則引用條文"
+
+key_revisions:
+  - id: 1
+    category: "申請書 / 切結書 / 委託書"
+    title: "格式小幅調整，增加都更會（協力推動組織）相關說明"
+    type: "amendment"
+    impact: "minor"
+  - id: 2
+    category: "容積獎勵計算"
+    title: "新增「規劃設計獎勵」項目，補充計算說明"
+    type: "new"
+    impact: "major"
+    reference: "臺北市都市更新建築容積獎勵辦法第9條"
+  - id: 3
+    category: "建築興建計畫"
+    title: "新增建築設計圖說格式要求（含圖例、比例尺）"
+    type: "amendment"
+    impact: "minor"
+  - id: 4
+    category: "審議資料表"
+    title: "欄位微調，新增土地面積細分欄"
+    type: "amendment"
+    impact: "minor"
+  - id: 5
+    category: "附錄"
+    title: "附錄十二新增「建築容積獎勵辦法申請項目檢核表」"
+    type: "new"
+    impact: "medium"
+
+technical_rules:
+  accessible_parking:
+    formula: "法定停車位 ≤ 50 輛 → 設 1 輛；> 50 輛 → 每滿 50 輛再加 1 輛"
+    note: "簡化版閾值公式，與108年後相同基礎但說明較不精確"
+    reference: "建築技術規則（當時版本）"
+  bonus_limit:
+    formula: "法定容積 × 50%"
+    note: "107年版以「法定容積」為計算基準（非「基準容積」）"
+    reference: "臺北市都市更新建築容積獎勵辦法（107年版）"
+  consent_ratio:
+    land: "土地所有權人同意比率 ≥ 2/3"
+    building: "合法建築物所有權人同意比率 ≥ 2/3"
+    reference: "都市更新條例第22條（舊法）"
+  public_hearing:
+    required: true
+    notice_period: "30天前公告"
+    newspaper: "報紙刊登（不含電子報）"
+
+form_fields:
+  - name: "案名"
+    status: "existing"
+  - name: "實施者"
+    status: "existing"
+  - name: "送審類別（A-1/B-1/B-2/C/D）"
+    status: "existing"
+  - name: "填表日期"
+    status: "existing"
+  - name: "土地面積"
+    status: "existing"
+  - name: "法定停車位"
+    status: "existing"
+  - name: "無障礙停車位"
+    status: "existing"
+  - name: "充電停車位"
+    status: "not_exist"
+    note: "107年版尚無此欄位，111年版新增"
+
+doc_structure:
+  front_docs:
+    - "都市更新事業計畫申請書"
+    - "切結書"
+    - "委託書"
+    - "臺北市都市更新審議資料表"
+    - "歷次會議紀錄回應綜理表"
+  main_chapters: 18
+  appendices: 22
+  note: "附錄數量較111年版少2項（附錄二十三、二十四尚未納入）"
+
+formatting:
+  paper: "A3 橫式雙面"
+  binding: "左側短邊裝訂"
+  color_print: "標示彩色，其餘黑白"
+  seal_required: "申請書、切結書、委託書、審議資料表"
+
+data_confidence: "medium"
+note: "107年版範本尚未取得完整文件，部分欄位依法規推論，待取得原始範本後核對"
