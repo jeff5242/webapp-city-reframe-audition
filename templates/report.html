@@ -21,10 +21,12 @@
         <h1 class="text-xl font-bold leading-snug break-words">{{ report.case_name }}</h1>
       </div>
       <div class="text-right text-sm text-blue-200 shrink-0 space-y-1">
-        <!-- 報核日期 + 版本說明 -->
-        {% if report.review_table and report.review_table.fill_date %}
+        {% if report.report_date %}
         <p class="text-blue-100">
-          報核日期：<span class="font-semibold text-white">{{ report.review_table.fill_date }}</span>
+          報核日期：<span class="font-semibold text-white">{{ report.report_date }}</span>
+        </p>
+        <p class="text-blue-300 text-xs">
+          來源：{{ report.report_date_source }}{% if report.report_date_page %} 第 {{ report.report_date_page }} 頁{% endif %}
         </p>
         <p class="text-blue-300 text-xs">
           依此日期 → 適用

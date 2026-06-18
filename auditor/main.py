@@ -113,9 +113,14 @@ async def audit(
 
         findings = _engine.evaluate(audit_data)
 
-        # --- Version selection (based on fill_date from review table) ---
-        fill_date = review_table.fill_date if review_table else None
-        reg_version, fill_date_iso = select_version(fill_date)
+        # --- Version selection: prefer 報核日期 from 申請書/切結書/委託書 ---
+        # Fall back to 填表日期 from 審議資料表 if front-doc date not found
+        report_date_roc: Optional[str] = (
+            front_docs.report_date if front_docs and front_docs.report_date else None
+        )
+        fill_date_fallback = review_table.fill_date if review_table else None
+        version_date = report_date_roc or fill_date_fallback
+        reg_version, fill_date_iso = select_version(version_date)
 
         # --- Case name & audit metadata ---
         case_name = (
@@ -164,6 +169,14 @@ async def audit(
         if re_path:
             documents.append(rights_exchange.filename or "權利變換計畫報告書.pdf")
 
+        # Determine report_date display info
+        if report_date_roc and front_docs:
+            rd_source = front_docs.report_date_source
+            rd_page   = front_docs.report_date_page
+        else:
+            rd_source = "審議資料表（填表日期）"
+            rd_page   = review_table.raw_page if review_table else None
+
         report = AuditReport(
             case_name=case_name,
             audit_time=audit_time,
@@ -175,6 +188,9 @@ async def audit(
             term_matches=list(term_matches),
             findings=findings,
             fill_date_iso=fill_date_iso,
+            report_date=version_date,
+            report_date_source=rd_source,
+            report_date_page=rd_page,
             diffs=diffs,
             prev_audit_time=prev_audit_time,
             annotated_pdf_key=annotated_key,
