@@ -39,21 +39,12 @@ init_db()
 
 @app.get("/health")
 async def health() -> JSONResponse:
-    return JSONResponse({
-        "status": "ok",
-        "templates_dir": str(_TEMPLATES_DIR),
-        "templates_exists": _TEMPLATES_DIR.exists(),
-        "upload_html_exists": (_TEMPLATES_DIR / "upload.html").exists(),
-    })
+    return JSONResponse({"status": "ok"})
 
 
 @app.get("/", response_class=HTMLResponse)
 async def upload_page(request: Request) -> HTMLResponse:
-    try:
-        return templates.TemplateResponse("upload.html", {"request": request})
-    except Exception as exc:
-        import traceback
-        return HTMLResponse(f"<pre>ERROR: {exc}\n{traceback.format_exc()}</pre>", status_code=500)
+    return templates.TemplateResponse(request, "upload.html")
 
 
 @app.get("/download/{key}")
