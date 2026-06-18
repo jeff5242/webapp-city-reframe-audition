@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from .extractors.front_docs import extract_front_docs
@@ -24,6 +24,11 @@ app = FastAPI(
 _TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 _engine = build_default_engine()
+
+
+@app.get("/health")
+async def health() -> JSONResponse:
+    return JSONResponse({"status": "ok"})
 
 
 @app.get("/", response_class=HTMLResponse)
