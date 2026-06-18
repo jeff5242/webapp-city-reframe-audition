@@ -28,6 +28,11 @@
               class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium border border-indigo-400 text-indigo-200 hover:bg-indigo-800 transition-colors">
         年度差異 Diff
       </button>
+      <button onclick="showTab('arch')"
+              id="tab-arch"
+              class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium border border-purple-400 text-purple-200 hover:bg-purple-800 transition-colors">
+        系統架構
+      </button>
       <a href="/" class="ml-auto px-4 py-1.5 rounded-full text-sm text-blue-300 hover:text-white border border-blue-600 hover:border-blue-400 transition-colors">
         ← 返回審查
       </a>
@@ -322,6 +327,222 @@
     </div>
   </div>
 
+  <!-- Architecture Panel -->
+  <div id="panel-arch" class="tab-panel hidden space-y-6">
+
+    <!-- Title -->
+    <div class="bg-white rounded-xl shadow-sm border border-purple-200 p-6">
+      <h2 class="text-xl font-bold text-gray-900 mb-1">系統知識架構說明</h2>
+      <p class="text-gray-500 text-sm">本系統採用「結構化規則引擎 + 精準 LLM 調用」的混合架構，兼具 RAG 知識管理的靈活性與 Workspace LLM 的確定性與效率。</p>
+    </div>
+
+    <!-- 3-column comparison -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+      <!-- RAG -->
+      <div class="bg-white rounded-xl shadow-sm border border-orange-200 overflow-hidden">
+        <div class="bg-orange-50 px-5 py-4 border-b border-orange-100">
+          <p class="text-xs text-orange-500 font-semibold uppercase tracking-wide mb-1">傳統做法</p>
+          <h3 class="font-bold text-gray-800 text-lg">RAG</h3>
+          <p class="text-xs text-gray-500 mt-1">Retrieval-Augmented Generation</p>
+        </div>
+        <div class="px-5 py-4 space-y-3 text-sm">
+          <div>
+            <p class="font-medium text-gray-700 mb-1">運作方式</p>
+            <ol class="text-xs text-gray-500 space-y-1 list-decimal list-inside">
+              <li>將法規文件切成 chunks</li>
+              <li>Embedding → 向量資料庫建索引</li>
+              <li>查詢時向量搜尋 top-k chunks</li>
+              <li>將 chunks 塞入 LLM 提示生成答案</li>
+            </ol>
+          </div>
+          <div>
+            <p class="font-medium text-green-700 text-xs mb-1">✅ 優點</p>
+            <ul class="text-xs text-gray-500 space-y-1">
+              <li>• 知識可動態更新（重新 embedding）</li>
+              <li>• 能處理大量非結構化文件</li>
+              <li>• 不需人工整理規則</li>
+            </ul>
+          </div>
+          <div>
+            <p class="font-medium text-red-700 text-xs mb-1">❌ 缺點</p>
+            <ul class="text-xs text-gray-500 space-y-1">
+              <li>• 向量搜尋可能遺漏語義關聯</li>
+              <li>• 需向量 DB 基礎設施（Pinecone 等）</li>
+              <li>• 每次查詢結果可能不一致</li>
+              <li>• 無法保證規則完整性</li>
+              <li>• LLM 幻覺風險高</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Our Hybrid (center, highlighted) -->
+      <div class="bg-white rounded-xl shadow-sm border-2 border-indigo-400 overflow-hidden">
+        <div class="bg-indigo-600 px-5 py-4">
+          <p class="text-xs text-indigo-200 font-semibold uppercase tracking-wide mb-1">本系統採用</p>
+          <h3 class="font-bold text-white text-lg">混合架構</h3>
+          <p class="text-xs text-indigo-200 mt-1">Structured Rules + Targeted LLM</p>
+        </div>
+        <div class="px-5 py-4 space-y-4 text-sm">
+          <div class="space-y-2">
+
+            <div class="bg-indigo-50 rounded-lg px-3 py-2">
+              <p class="text-xs font-semibold text-indigo-700 mb-1">① 結構化知識庫（RAG 精神）</p>
+              <p class="text-xs text-gray-600">法規 Wiki 以 YAML 結構化儲存，版本控管、可審計、可 diff。不需向量搜尋 — 直接精確命中。</p>
+              <p class="font-mono text-xs text-indigo-400 mt-1">docs/wiki/111.yaml</p>
+            </div>
+
+            <div class="bg-green-50 rounded-lg px-3 py-2">
+              <p class="text-xs font-semibold text-green-700 mb-1">② 規則引擎（Workspace LLM 精神）</p>
+              <p class="text-xs text-gray-600">審核邏輯以 Python 確定性規則實作，法源明確，零幻覺風險，可追溯每條判斷依據。</p>
+              <p class="font-mono text-xs text-green-400 mt-1">auditor/rules/engine.py</p>
+            </div>
+
+            <div class="bg-blue-50 rounded-lg px-3 py-2">
+              <p class="text-xs font-semibold text-blue-700 mb-1">③ PDF 直接提取（零 LLM 依賴）</p>
+              <p class="text-xs text-gray-600">pdfplumber 直接萃取文字，Regex 解析數值。速度快、費用零、離線可用。</p>
+              <p class="font-mono text-xs text-blue-400 mt-1">auditor/parsers/pdf_reader.py</p>
+            </div>
+
+            <div class="bg-purple-50 rounded-lg px-3 py-2">
+              <p class="text-xs font-semibold text-purple-700 mb-1">④ 精準 LLM 調用（兩者結合點）</p>
+              <p class="text-xs text-gray-600">僅在規則無法確定性判斷的模糊情境下調用 Anthropic API，控制成本並最大化準確性。</p>
+              <p class="font-mono text-xs text-purple-400 mt-1">anthropic SDK — 按需調用</p>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- Workspace LLM -->
+      <div class="bg-white rounded-xl shadow-sm border border-blue-200 overflow-hidden">
+        <div class="bg-blue-50 px-5 py-4 border-b border-blue-100">
+          <p class="text-xs text-blue-500 font-semibold uppercase tracking-wide mb-1">另一種做法</p>
+          <h3 class="font-bold text-gray-800 text-lg">Workspace LLM</h3>
+          <p class="text-xs text-gray-500 mt-1">Fine-tuned / System-prompted Model</p>
+        </div>
+        <div class="px-5 py-4 space-y-3 text-sm">
+          <div>
+            <p class="font-medium text-gray-700 mb-1">運作方式</p>
+            <ol class="text-xs text-gray-500 space-y-1 list-decimal list-inside">
+              <li>將法規知識納入系統提示或微調模型</li>
+              <li>查詢時直接推理，無需外部檢索</li>
+              <li>模型本身即「知識庫」</li>
+            </ol>
+          </div>
+          <div>
+            <p class="font-medium text-green-700 text-xs mb-1">✅ 優點</p>
+            <ul class="text-xs text-gray-500 space-y-1">
+              <li>• 零延遲知識存取</li>
+              <li>• 語境理解能力強</li>
+              <li>• 無需額外基礎設施</li>
+            </ul>
+          </div>
+          <div>
+            <p class="font-medium text-red-700 text-xs mb-1">❌ 缺點</p>
+            <ul class="text-xs text-gray-500 space-y-1">
+              <li>• 知識更新需重新訓練/調整</li>
+              <li>• 法規版本切換不透明</li>
+              <li>• 計算成本高（每次全量推理）</li>
+              <li>• 難以審計每條判斷依據</li>
+              <li>• 幻覺仍存在</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Our hybrid benefit summary -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <h3 class="font-semibold text-gray-800 mb-4">混合架構的具體效益</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+        <div class="text-center bg-green-50 rounded-xl p-4">
+          <p class="text-2xl font-bold text-green-700 mb-1">零</p>
+          <p class="text-xs font-semibold text-green-600 mb-2">向量搜尋延遲</p>
+          <p class="text-xs text-gray-500">法規結構化 → 直接精確查找，<br>無 embedding 管道</p>
+        </div>
+        <div class="text-center bg-indigo-50 rounded-xl p-4">
+          <p class="text-2xl font-bold text-indigo-700 mb-1">100%</p>
+          <p class="text-xs font-semibold text-indigo-600 mb-2">規則可追溯性</p>
+          <p class="text-xs text-gray-500">每條 finding 均附法源條文，<br>審計軌跡完整</p>
+        </div>
+        <div class="text-center bg-blue-50 rounded-xl p-4">
+          <p class="text-2xl font-bold text-blue-700 mb-1">4 版</p>
+          <p class="text-xs font-semibold text-blue-600 mb-2">法規版本自動切換</p>
+          <p class="text-xs text-gray-500">依報核日期選擇 107/108/111/113，<br>Wiki diff 即時呈現</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data flow diagram -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <h3 class="font-semibold text-gray-800 mb-4">資料流程</h3>
+      <div class="overflow-x-auto">
+        <div class="flex items-center gap-2 text-xs text-gray-600 min-w-max">
+          <div class="bg-gray-100 rounded-lg px-3 py-2 text-center">
+            <p class="font-semibold">PDF 上傳</p>
+            <p class="text-gray-400">事業計畫 + 權利變換</p>
+          </div>
+          <span class="text-gray-400">→</span>
+          <div class="bg-blue-50 rounded-lg px-3 py-2 text-center">
+            <p class="font-semibold text-blue-700">pdfplumber</p>
+            <p class="text-gray-400">文字提取（零 LLM）</p>
+          </div>
+          <span class="text-gray-400">→</span>
+          <div class="bg-purple-50 rounded-lg px-3 py-2 text-center">
+            <p class="font-semibold text-purple-700">Regex 解析器</p>
+            <p class="text-gray-400">報核日期 / 欄位數值</p>
+          </div>
+          <span class="text-gray-400">→</span>
+          <div class="bg-indigo-50 rounded-lg px-3 py-2 text-center">
+            <p class="font-semibold text-indigo-700">版本選擇器</p>
+            <p class="text-gray-400">Wiki YAML 對應版年</p>
+          </div>
+          <span class="text-gray-400">→</span>
+          <div class="bg-green-50 rounded-lg px-3 py-2 text-center">
+            <p class="font-semibold text-green-700">規則引擎</p>
+            <p class="text-gray-400">確定性審核 11 條</p>
+          </div>
+          <span class="text-gray-400">→</span>
+          <div class="bg-orange-50 rounded-lg px-3 py-2 text-center">
+            <p class="font-semibold text-orange-700">SQLite + pymupdf</p>
+            <p class="text-gray-400">歷史記錄 + 標註 PDF</p>
+          </div>
+          <span class="text-gray-400">→</span>
+          <div class="bg-gray-800 rounded-lg px-3 py-2 text-center text-white">
+            <p class="font-semibold">審查報告</p>
+            <p class="text-gray-300">HTML + 下載</p>
+          </div>
+        </div>
+        <p class="text-xs text-gray-400 mt-3">
+          ＊ LLM API 預留於規則引擎「模糊情境判斷」擴充點，本 POC 版本零 API 費用（純規則 + Regex）
+        </p>
+      </div>
+    </div>
+
+    <!-- RAG hybrid note -->
+    <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-6">
+      <h3 class="font-semibold text-indigo-800 mb-3">與 RAG 的結合路徑（路線圖）</h3>
+      <div class="space-y-3 text-sm">
+        <div class="flex gap-3">
+          <span class="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full shrink-0 h-fit">現階段</span>
+          <p class="text-gray-700">Wiki YAML 作為結構化知識庫，Python 規則引擎精確對應各版條文。查詢確定性 100%，零向量搜尋延遲。</p>
+        </div>
+        <div class="flex gap-3">
+          <span class="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full shrink-0 h-fit">下一步</span>
+          <p class="text-gray-700">將 Wiki YAML + 原始法規 PDF 同時建立 embedding，支援「自然語言查詢法規」功能（RAG 模式），讓審查員可自由提問而非只看固定欄位。</p>
+        </div>
+        <div class="flex gap-3">
+          <span class="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full shrink-0 h-fit">長期</span>
+          <p class="text-gray-700">規則引擎 + RAG 雙軌並行：確定性規則負責必審項目（CALC/DOC/FORM），RAG 負責脈絡查詢與模糊判斷，LLM 做最終綜合判斷輸出審查意見草稿。</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
 </div>
 
 <script>
@@ -331,15 +552,18 @@
   function showTab(id) {
     panels.forEach(p => p.classList.add('hidden'));
     tabs.forEach(t => {
-      t.classList.remove('bg-white', 'text-blue-900', 'border-white');
-      t.classList.add('text-blue-200');
+      t.classList.remove('bg-white', 'text-blue-900', 'text-indigo-900', 'text-purple-900', 'border-white');
+      if (t.id === 'tab-diff') t.classList.add('text-indigo-200');
+      else if (t.id === 'tab-arch') t.classList.add('text-purple-200');
+      else t.classList.add('text-blue-200');
     });
     const panel = document.getElementById('panel-' + id);
     const tab = document.getElementById('tab-' + id);
     if (panel) panel.classList.remove('hidden');
     if (tab) {
-      tab.classList.remove('text-blue-200', 'text-indigo-200');
-      tab.classList.add('bg-white', 'text-blue-900', 'border-white');
+      tab.classList.remove('text-blue-200', 'text-indigo-200', 'text-purple-200');
+      tab.classList.add('bg-white', 'border-white',
+        id === 'diff' ? 'text-indigo-900' : id === 'arch' ? 'text-purple-900' : 'text-blue-900');
     }
   }
 
