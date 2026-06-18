@@ -27,6 +27,9 @@ class FrontDocsData:
     has_application: bool
     has_affidavit: bool
     has_review_table: bool
+    report_date: Optional[str] = None       # ROC date string from 申請書/切結書/委託書
+    report_date_page: Optional[int] = None  # page number where date was found
+    report_date_source: Optional[str] = None  # doc_type: "申請書", "切結書", "委託書"
 
 
 @dataclass(frozen=True)
@@ -105,8 +108,11 @@ class AuditReport:
     pii_risks: List[PiiRisk]
     term_matches: List[WrongTermMatch]
     findings: List[Finding]
-    # ① 報核日期相關
+    # ① 報核日期相關（優先從 申請書/切結書/委託書 讀取，fallback 審議資料表填表日期）
     fill_date_iso: Optional[str] = None
+    report_date: Optional[str] = None         # 報核日期 ROC string
+    report_date_source: Optional[str] = None  # "申請書", "切結書", "委託書", or "審議資料表（填表日期）"
+    report_date_page: Optional[int] = None
     # ② 版次差異比對
     diffs: List[FindingDiff] = field(default_factory=list)
     prev_audit_time: Optional[str] = None
