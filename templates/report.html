@@ -15,21 +15,48 @@
 
   <!-- Header -->
   <div class="bg-blue-800 text-white rounded-xl px-8 py-6 mb-6">
-    <div class="flex justify-between items-start">
-      <div>
+    <div class="flex justify-between items-start gap-4">
+      <div class="flex-1 min-w-0">
         <p class="text-blue-200 text-sm mb-1">臺北市都市更新審議自動審查報告</p>
-        <h1 class="text-xl font-bold leading-snug">{{ report.case_name }}</h1>
+        <h1 class="text-xl font-bold leading-snug break-words">{{ report.case_name }}</h1>
       </div>
-      <div class="text-right text-sm text-blue-200">
-        <p>審查版本：{{ report.rule_version }}</p>
-        <p>審查時間：{{ report.audit_time }}</p>
+      <div class="text-right text-sm text-blue-200 shrink-0 space-y-1">
+        <!-- 報核日期 + 版本說明 -->
+        {% if report.review_table and report.review_table.fill_date %}
+        <p class="text-blue-100">
+          報核日期：<span class="font-semibold text-white">{{ report.review_table.fill_date }}</span>
+        </p>
+        <p class="text-blue-300 text-xs">
+          依此日期 → 適用
+          <span class="font-semibold text-blue-100">{{ report.rule_version }}</span>
+          規則
+        </p>
+        {% else %}
+        <p>審查版本：<span class="font-semibold">{{ report.rule_version }}</span></p>
+        <p class="text-blue-300 text-xs">（未讀到報核日期，預設套用 111 年版）</p>
+        {% endif %}
+        <p class="text-blue-300">審查時間：{{ report.audit_time }}</p>
       </div>
     </div>
+
+    <!-- Documents -->
     <div class="mt-4 flex flex-wrap gap-2 text-xs">
       {% for doc in report.documents %}
       <span class="bg-blue-700 rounded px-2 py-1">📄 {{ doc }}</span>
       {% endfor %}
     </div>
+
+    <!-- Download annotated PDF button -->
+    {% if report.annotated_pdf_key %}
+    <div class="mt-4">
+      <a
+        href="/download/{{ report.annotated_pdf_key }}"
+        class="no-print inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+      >
+        ⬇ 下載標註 PDF（含問題頁標記）
+      </a>
+    </div>
+    {% endif %}
   </div>
 
   <!-- Summary Stats -->
@@ -52,13 +79,53 @@
     </div>
   </div>
 
+  <!-- Version Diff (shown when re-uploading same case) -->
+  {% if report.diffs %}
+  <div class="bg-white rounded-xl shadow-sm border border-indigo-200 mb-6">
+    <div class="px-6 py-4 border-b border-indigo-100 bg-indigo-50 rounded-t-xl">
+      <h2 class="font-semibold text-indigo-800">
+        版次差異比對
+        <span class="text-xs font-normal text-indigo-500 ml-2">對比上次審查（{{ report.prev_audit_time }}）</span>
+      </h2>
+    </div>
+    <div class="divide-y divide-gray-100">
+      {% for d in report.diffs %}
+      {% if d.change == 'improved' %}
+        {% set bg = 'bg-green-50' %}{% set badge = 'bg-green-100 text-green-700' %}{% set icon = '✅' %}{% set label = '已修正' %}
+      {% elif d.change == 'regressed' %}
+        {% set bg = 'bg-red-50' %}{% set badge = 'bg-red-100 text-red-700' %}{% set icon = '🔴' %}{% set label = '新增問題' %}
+      {% elif d.change == 'new' %}
+        {% set bg = 'bg-blue-50' %}{% set badge = 'bg-blue-100 text-blue-700' %}{% set icon = '🆕' %}{% set label = '新規則' %}
+      {% else %}
+        {% set bg = 'bg-yellow-50' %}{% set badge = 'bg-yellow-100 text-yellow-700' %}{% set icon = '🔄' %}{% set label = '狀態變更' %}
+      {% endif %}
+      <div class="px-6 py-3 {{ bg }} flex items-start gap-3">
+        <span class="text-lg mt-0.5">{{ icon }}</span>
+        <div class="flex-1">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-mono {{ badge }} px-2 py-0.5 rounded-full">{{ d.rule_id }}</span>
+            <span class="font-medium text-sm text-gray-800">{{ d.rule_name }}</span>
+            <span class="text-xs {{ badge }} px-2 py-0.5 rounded-full">{{ label }}</span>
+          </div>
+          {% if d.prev_status %}
+          <p class="text-xs text-gray-500 mt-0.5">
+            {{ d.prev_status }} → {{ d.curr_status }}
+          </p>
+          {% endif %}
+          <p class="text-xs text-gray-600 mt-0.5">{{ d.message }}</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Findings -->
   <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
     <div class="px-6 py-4 border-b border-gray-100">
       <h2 class="font-semibold text-gray-700">審查結果明細</h2>
     </div>
     <div class="divide-y divide-gray-100">
-      {% set severity_order = ['critical', 'high', 'medium', 'low', 'info'] %}
       {% for finding in sorted_findings %}
       {% set status_config = {
         'fail': {'bg': 'bg-red-50', 'border': 'border-red-300', 'badge': 'bg-red-100 text-red-700', 'icon': '🔴'},
@@ -155,7 +222,7 @@
         {{ row('實施者', rt.implementer) }}
         {{ row('統一編號', rt.implementer_id) }}
         {{ row('送審類別', rt.submission_type) }}
-        {{ row('填表日期', rt.fill_date) }}
+        {{ row('報核日期（填表日期）', rt.fill_date) }}
         {{ row('容積獎勵申請額度', (rt.bonus_floor_area | round(2) | string + ' m²') if rt.bonus_floor_area is not none else None,
                highlight=(rt.bonus_floor_area and rt.bonus_limit and rt.bonus_floor_area > rt.bonus_limit)) }}
         {{ row('容積獎勵上限', (rt.bonus_limit | round(2) | string + ' m²') if rt.bonus_limit is not none else None) }}
@@ -172,7 +239,10 @@
   <!-- Footer -->
   <div class="text-center text-xs text-gray-400 mt-8 no-print">
     <p>本報告由自動審查系統產生，僅供初步篩查參考，最終審查結論仍需人工確認。</p>
-    <button onclick="window.print()" class="mt-2 text-blue-500 underline">列印 / 儲存 PDF</button>
+    <div class="flex justify-center gap-4 mt-2">
+      <button onclick="window.print()" class="text-blue-500 underline">列印 / 儲存 PDF</button>
+      <a href="/" class="text-blue-500 underline">重新審查</a>
+    </div>
   </div>
 
 </div>

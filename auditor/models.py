@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, Optional, Tuple, List
+from typing import Literal, Optional, Tuple, List, TYPE_CHECKING
 
 
 @dataclass(frozen=True)
@@ -65,6 +65,16 @@ class NumberContext:
 
 
 @dataclass(frozen=True)
+class FindingDiff:
+    rule_id: str
+    rule_name: str
+    change: Literal["improved", "regressed", "changed", "new"]
+    prev_status: Optional[str]
+    curr_status: str
+    message: str
+
+
+@dataclass(frozen=True)
 class Finding:
     rule_id: str
     rule_name: str
@@ -95,6 +105,13 @@ class AuditReport:
     pii_risks: List[PiiRisk]
     term_matches: List[WrongTermMatch]
     findings: List[Finding]
+    # ① 報核日期相關
+    fill_date_iso: Optional[str] = None
+    # ② 版次差異比對
+    diffs: List[FindingDiff] = field(default_factory=list)
+    prev_audit_time: Optional[str] = None
+    # ③ PDF 標註下載 key
+    annotated_pdf_key: Optional[str] = None
 
     @property
     def critical_fails(self) -> List[Finding]:
