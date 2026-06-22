@@ -6,6 +6,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev \
     zlib1g-dev \
+    nginx \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies first (layer cache)
@@ -23,5 +24,10 @@ RUN pip install --no-cache-dir \
 # Copy source (after deps so source changes don't bust dep cache)
 COPY . .
 
+# nginx: replace default site, disable default site symlink if present
+RUN cp nginx.conf /etc/nginx/sites-available/default \
+    && chmod +x start.sh \
+    && nginx -t
+
 EXPOSE 8080
-CMD ["uvicorn", "auditor.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["/bin/bash", "start.sh"]
