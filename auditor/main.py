@@ -7,12 +7,27 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from dotenv import load_dotenv
+load_dotenv()
+
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from .annotator import annotate_pdf
 from .extractors.front_docs import extract_front_docs
+from .s3 import (
+    delete_case_meta,
+    download_to_temp,
+    generate_download_url,
+    generate_upload_url,
+    list_cases,
+    s3_available,
+    save_annotated_pdf,
+    save_case_meta,
+    setup_bucket_encryption,
+)
 from .wiki import load_all_wiki
 from .extractors.review_table import extract_review_table
 from .extractors.term_checker import extract_number_contexts, scan_for_wrong_terms
@@ -29,13 +44,19 @@ app = FastAPI(
 )
 
 _TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
+_STATIC_DIR = Path(__file__).parent.parent / "static"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+
+if _STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 _engine = build_default_engine()
 
 # In-memory cache for annotated PDFs (key → bytes)
 _PDF_CACHE: dict[str, bytes] = {}
 
 init_db()
+if s3_available():
+    setup_bucket_encryption()
 
 
 @app.get("/health")
@@ -46,6 +67,38 @@ async def health() -> JSONResponse:
 @app.get("/", response_class=HTMLResponse)
 async def upload_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "upload.html")
+
+
+@app.get("/upload-url")
+async def upload_url(filename: str) -> JSONResponse:
+    if not s3_available():
+        raise HTTPException(status_code=503, detail="S3 未設定")
+    return JSONResponse(generate_upload_url(filename))
+
+
+@app.get("/cases")
+async def cases_list() -> JSONResponse:
+    if not s3_available():
+        return JSONResponse([])
+    return JSONResponse(list_cases())
+
+
+@app.delete("/cases/{meta_id}")
+async def delete_case(meta_id: str) -> JSONResponse:
+    if not s3_available():
+        raise HTTPException(status_code=503, detail="S3 未設定")
+    delete_case_meta(meta_id)
+    return JSONResponse({"ok": True})
+
+
+@app.get("/cases/{meta_id}/download")
+async def download_annotated(meta_id: str) -> JSONResponse:
+    """Return a presigned S3 URL for downloading the annotated PDF."""
+    if not s3_available():
+        raise HTTPException(status_code=503, detail="S3 未設定")
+    key = f"annotated/{meta_id}_annotated.pdf"
+    url = generate_download_url(key, f"annotated_{meta_id}.pdf")
+    return JSONResponse({"url": url})
 
 
 @app.get("/wiki", response_class=HTMLResponse)
@@ -69,25 +122,47 @@ async def download_annotated(key: str) -> Response:
 @app.post("/audit", response_class=HTMLResponse)
 async def audit(
     request: Request,
+    # Direct file upload (local / small files)
     business_plan: Optional[UploadFile] = File(None),
     rights_exchange: Optional[UploadFile] = File(None),
+    # S3 key path (large files via presigned URL)
+    business_plan_key: Optional[str] = Form(None),
+    rights_exchange_key: Optional[str] = Form(None),
 ) -> HTMLResponse:
-    if not business_plan or not business_plan.filename:
+    has_direct = business_plan and business_plan.filename
+    has_s3 = bool(business_plan_key)
+    if not has_direct and not has_s3:
         raise HTTPException(status_code=400, detail="請上傳事業計畫報告書（PDF）")
-    if not business_plan.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="僅支援 PDF 格式")
+
+    bp_s3_key: Optional[str] = business_plan_key
+    re_s3_key: Optional[str] = rights_exchange_key
+    # Generate meta_id early so annotated PDF and meta share the same ID
+    case_meta_id: Optional[str] = uuid.uuid4().hex[:12] if bp_s3_key else None
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        # Save primary PDF
-        bp_path = Path(tmp_dir) / (business_plan.filename or "business_plan.pdf")
-        bp_path.write_bytes(await business_plan.read())
-        primary_pdf = str(bp_path)
+        # Resolve primary PDF path
+        if has_s3:
+            primary_pdf = download_to_temp(business_plan_key, tmp_dir)
+            bp_filename = Path(business_plan_key).name
+        else:
+            if not business_plan.filename.lower().endswith(".pdf"):
+                raise HTTPException(status_code=400, detail="僅支援 PDF 格式")
+            bp_path = Path(tmp_dir) / (business_plan.filename or "business_plan.pdf")
+            bp_path.write_bytes(await business_plan.read())
+            primary_pdf = str(bp_path)
+            bp_filename = business_plan.filename
 
-        # Save secondary PDF if provided
+        # Resolve secondary PDF path
         re_path: Optional[Path] = None
-        if rights_exchange and rights_exchange.filename and rights_exchange.filename.lower().endswith(".pdf"):
+        re_filename: Optional[str] = None
+        if rights_exchange_key:
+            re_local = download_to_temp(rights_exchange_key, tmp_dir)
+            re_path = Path(re_local)
+            re_filename = Path(rights_exchange_key).name
+        elif rights_exchange and rights_exchange.filename and rights_exchange.filename.lower().endswith(".pdf"):
             re_path = Path(tmp_dir) / (rights_exchange.filename or "rights_exchange.pdf")
             re_path.write_bytes(await rights_exchange.read())
+            re_filename = rights_exchange.filename
 
         # --- Extract from primary document ---
         try:
@@ -133,7 +208,7 @@ async def audit(
         case_name = (
             review_table.case_name
             if review_table and review_table.case_name
-            else business_plan.filename
+            else bp_filename
         )
         audit_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
@@ -164,17 +239,21 @@ async def audit(
 
         # --- PDF annotation ---
         annotated_key: Optional[str] = None
+        annotated_s3_key: Optional[str] = None
         try:
             pdf_bytes = annotate_pdf(primary_pdf, findings)
             annotated_key = uuid.uuid4().hex[:8]
             _PDF_CACHE[annotated_key] = pdf_bytes
+            # Persist to S3 if this is an S3-sourced audit
+            if case_meta_id and s3_available():
+                annotated_s3_key = save_annotated_pdf(case_meta_id, pdf_bytes)
         except Exception:
             pass
 
         # --- Build document list ---
-        documents = [business_plan.filename]
+        documents = [bp_filename]
         if re_path:
-            documents.append(rights_exchange.filename or "權利變換計畫報告書.pdf")
+            documents.append(re_filename or "權利變換計畫報告書.pdf")
 
         # Determine report_date display info
         if report_date_roc and front_docs:
@@ -203,7 +282,21 @@ async def audit(
             annotated_pdf_key=annotated_key,
         )
 
-        return HTMLResponse(content=generate_report(report))
+        html = generate_report(report)
+
+    # Persist case metadata in S3 for history (files are kept, not deleted)
+    if bp_s3_key and s3_available():
+        save_case_meta(
+            bp_key=bp_s3_key,
+            bp_filename=bp_filename,
+            case_name=case_name,
+            meta_id=case_meta_id,
+            re_key=re_s3_key,
+            re_filename=re_filename if re_s3_key else None,
+            annotated_key=annotated_s3_key,
+        )
+
+    return HTMLResponse(content=html)
 
 
 def _compute_diff(prev_findings_json: str, curr_findings) -> list[FindingDiff]:

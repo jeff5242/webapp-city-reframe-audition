@@ -18,3 +18,5 @@ demo_report_*.html
 
 # OS
 .DS_Store
+.env
+.env.local
