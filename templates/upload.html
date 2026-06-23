@@ -4,15 +4,28 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>都市更新審議自動審查</title>
+  <link rel="icon" type="image/png" href="/static/logo.png">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
 
+<!-- 全頁 loading overlay（複驗 / 審查進行中） -->
+<div id="auditOverlay" class="hidden fixed inset-0 z-[100] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center gap-6">
+  <div class="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+  <div class="text-center">
+    <p class="text-lg font-semibold text-gray-800" id="overlayTitle">正在複驗中…</p>
+    <p class="text-sm text-gray-500 mt-1" id="overlaySubtitle">伺服器正在重新讀取 PDF 並執行 OCR，請稍候</p>
+  </div>
+</div>
+
 <div class="max-w-3xl w-full mx-auto px-4 py-10">
-  <div class="flex items-start justify-between mb-8">
-    <div>
-      <h1 class="text-2xl font-bold text-gray-800">臺北市都市更新審議</h1>
-      <p class="text-gray-500 mt-1">自動審查系統 · POC</p>
+  <div class="flex items-center justify-between mb-8">
+    <div class="flex items-center gap-4">
+      <img src="/static/logo.png" alt="URI Taipei" class="h-14 w-auto object-contain">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-800">臺北市都市更新審議</h1>
+        <p class="text-gray-500 mt-0.5">自動審查系統 · POC</p>
+      </div>
     </div>
     <a href="/wiki"
        class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm">
@@ -73,17 +86,92 @@
       </button>
 
       <!-- Progress -->
-      <div id="progress" class="hidden mt-4 text-center text-sm text-gray-500">
-        <div class="inline-block animate-spin mr-2">⏳</div>
-        審查中，大型 PDF 需要約 30 秒…
+      <div id="progress" class="hidden mt-4 space-y-3">
+        <div id="progressBp" class="hidden">
+          <div class="flex justify-between text-xs text-gray-500 mb-1">
+            <span>事業計畫報告書 上傳中…</span>
+            <span id="progressBpPct">0%</span>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-1.5">
+            <div id="progressBpBar" class="bg-blue-500 h-1.5 rounded-full transition-all" style="width:0%"></div>
+          </div>
+        </div>
+        <div id="progressRe" class="hidden">
+          <div class="flex justify-between text-xs text-gray-500 mb-1">
+            <span>權利變換計畫報告書 上傳中…</span>
+            <span id="progressRePct">0%</span>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-1.5">
+            <div id="progressReBar" class="bg-blue-500 h-1.5 rounded-full transition-all" style="width:0%"></div>
+          </div>
+        </div>
+        <p id="progressStatus" class="text-center text-sm text-gray-500">
+          <span class="inline-block animate-spin mr-1">⏳</span>
+          <span id="progressMsg">準備中…</span>
+        </p>
       </div>
 
     </form>
   </div>
 
-  <p class="text-center text-xs text-gray-400 mb-10">
-    僅作本機處理，PDF 不會上傳至外部伺服器
-  </p>
+  <!-- 加密與隱私說明 -->
+  <div class="flex items-center justify-center gap-4 mb-6 text-xs text-gray-500">
+    <span class="flex items-center gap-1">
+      <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+      </svg>
+      上傳及儲存均以 AES-256 加密
+    </span>
+    <span class="text-gray-300">|</span>
+    <span class="flex items-center gap-1">
+      <svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+      </svg>
+      僅授權伺服器可解密讀取
+    </span>
+    <span class="text-gray-300">|</span>
+    <span>存放於 AWS S3 東京節點</span>
+  </div>
+
+  <!-- ── 歷史案件 Dropdown ── -->
+  <div class="mb-10">
+    <details id="historyDetails" class="group">
+      <summary class="flex items-center justify-between cursor-pointer select-none bg-white border border-gray-200 rounded-xl px-5 py-3 hover:bg-gray-50 transition-colors">
+        <span class="text-sm font-semibold text-gray-700">
+          歷史案件
+          <span id="historyCnt" class="ml-2 text-xs font-normal text-gray-400"></span>
+        </span>
+        <span class="flex items-center gap-3">
+          <button
+            onclick="event.preventDefault(); openManage()"
+            class="text-xs text-indigo-600 hover:underline"
+          >管理</button>
+          <svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </span>
+      </summary>
+      <div class="mt-2 space-y-1.5" id="historyList">
+        <p class="text-center py-4 text-sm text-gray-400">載入中…</p>
+      </div>
+    </details>
+  </div>
+
+  <!-- ── 管理 Modal ── -->
+  <div id="manageModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/40" onclick="closeManage()"></div>
+    <div class="absolute inset-x-4 top-8 bottom-8 max-w-3xl mx-auto bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden">
+      <div class="flex items-center justify-between px-6 py-4 border-b">
+        <h2 class="text-base font-semibold text-gray-800">歷史案件管理</h2>
+        <button onclick="closeManage()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+      </div>
+      <div id="manageList" class="flex-1 overflow-y-auto px-6 py-4 space-y-3 text-sm">
+        <p class="text-center text-gray-400 py-8">載入中…</p>
+      </div>
+    </div>
+  </div>
 
   <!-- ── 功能說明 ── -->
   <div class="space-y-6">
@@ -190,6 +278,7 @@
           <li>• 兩份文件（事業計畫 + 權利變換）分開上傳</li>
           <li>• 版次變更差異比對（SQLite 歷史記錄）</li>
           <li>• 標註 PDF 下載（pymupdf 標記問題頁）</li>
+          <li>• 檔案 AES-256 加密儲存於 S3，解密僅限授權伺服器</li>
         </ul>
       </div>
 
@@ -219,7 +308,6 @@
     const zone  = document.getElementById(id + 'Zone');
     const icon  = document.getElementById(id + 'Icon');
     const label = document.getElementById(id + 'Label');
-
     if (input.files.length > 0) {
       const file = input.files[0];
       const mb   = (file.size / 1024 / 1024).toFixed(1);
@@ -235,37 +323,242 @@
       label.textContent = '點選或拖曳 PDF';
       label.title       = '';
     }
-
-    // Enable submit when business_plan is selected
-    const bpReady = document.getElementById('bpInput').files.length > 0;
-    document.getElementById('submitBtn').disabled = !bpReady;
+    document.getElementById('submitBtn').disabled =
+      document.getElementById('bpInput').files.length === 0;
   }
 
-  // Set default border classes on load
   document.querySelectorAll('#bpZone, #reZone').forEach(z => z.classList.add('border-gray-300'));
 
-  // Drag and drop for both zones
   ['bp', 're'].forEach(id => {
     const zone  = document.getElementById(id + 'Zone');
     const input = document.getElementById(id + 'Input');
-    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('border-blue-500', 'bg-blue-50'); });
+    zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('border-blue-500', 'bg-blue-50'); });
     zone.addEventListener('dragleave', () => zone.classList.remove('border-blue-500', 'bg-blue-50'));
     zone.addEventListener('drop', e => {
       e.preventDefault();
       zone.classList.remove('border-blue-500', 'bg-blue-50');
-      const files = e.dataTransfer.files;
-      if (files.length > 0) {
+      if (e.dataTransfer.files.length > 0) {
         const dt = new DataTransfer();
-        dt.items.add(files[0]);
+        dt.items.add(e.dataTransfer.files[0]);
         input.files = dt.files;
         onFileChange(id, input);
       }
     });
   });
 
-  document.getElementById('uploadForm').addEventListener('submit', () => {
-    document.getElementById('submitBtn').disabled = true;
-    document.getElementById('progress').classList.remove('hidden');
+  // ── S3 presigned upload ──────────────────────────────────────────────────
+  function setProgress(barId, pctId, pct) {
+    document.getElementById(barId).style.width = pct + '%';
+    document.getElementById(pctId).textContent = pct + '%';
+  }
+
+  function setMsg(msg) {
+    document.getElementById('progressMsg').textContent = msg;
+  }
+
+  async function uploadToS3(file, progressBarId, progressPctId) {
+    const res  = await fetch(`/upload-url?filename=${encodeURIComponent(file.name)}`);
+    if (!res.ok) throw new Error('無法取得上傳網址');
+    const { key, upload_url, sse_header, sse_value } = await res.json();
+
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', upload_url);
+      xhr.setRequestHeader('Content-Type', 'application/pdf');
+      if (sse_header) xhr.setRequestHeader(sse_header, sse_value); // AES-256 加密
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) setProgress(progressBarId, progressPctId, Math.round(e.loaded / e.total * 100));
+      };
+      xhr.onload  = () => xhr.status === 200 ? resolve() : reject(new Error('S3 上傳失敗 ' + xhr.status));
+      xhr.onerror = () => reject(new Error('網路錯誤'));
+      xhr.send(file);
+    });
+
+    return key;
+  }
+
+  // ── History helpers ─────────────────────────────────────────────────────
+  let _casesCache = [];
+
+  function fmtTs(iso) {
+    if (!iso) return '—';
+    return iso.replace('T', ' ').slice(0, 16) + ' UTC';
+  }
+
+  async function fetchCases() {
+    _casesCache = await fetch('/cases').then(r => r.json()).catch(() => []);
+    return _casesCache;
+  }
+
+  async function loadHistory() {
+    const list = document.getElementById('historyList');
+    const cnt  = document.getElementById('historyCnt');
+    list.innerHTML = '<p class="text-center py-4 text-sm text-gray-400">載入中…</p>';
+    try {
+      const cases = await fetchCases();
+      cnt.textContent = cases.length ? `(${cases.length})` : '';
+      if (!cases.length) {
+        list.innerHTML = '<p class="text-center py-4 text-sm text-gray-400">尚無歷史案件</p>';
+        return;
+      }
+      list.innerHTML = cases.map(c => `
+        <div class="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-2.5 border border-gray-100">
+          <div class="flex-1 min-w-0">
+            <p class="font-medium text-gray-800 text-sm truncate">${c.case_name || c.bp_filename}</p>
+            <p class="text-xs text-gray-400 mt-0.5 truncate">
+              事業計畫：${c.bp_filename}
+              ${c.re_filename ? `　権利變換：${c.re_filename}` : ''}
+            </p>
+          </div>
+          <button
+            onclick="reaudit('${c.bp_key}', '${c.re_key || ''}')"
+            class="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+          >複驗</button>
+        </div>`).join('');
+    } catch {
+      list.innerHTML = '<p class="text-center py-4 text-sm text-red-400">載入失敗</p>';
+    }
+  }
+
+  // ── Manage modal ─────────────────────────────────────────────────────────
+  function openManage() {
+    document.getElementById('manageModal').classList.remove('hidden');
+    renderManage();
+  }
+  function closeManage() {
+    document.getElementById('manageModal').classList.add('hidden');
+  }
+
+  async function renderManage() {
+    const list = document.getElementById('manageList');
+    list.innerHTML = '<p class="text-center text-gray-400 py-8">載入中…</p>';
+    const cases = await fetchCases();
+    if (!cases.length) {
+      list.innerHTML = '<p class="text-center text-gray-400 py-8">尚無歷史案件</p>';
+      return;
+    }
+    list.innerHTML = cases.map(c => `
+      <div id="case-${c.meta_id}" class="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="font-semibold text-gray-800 truncate">${c.case_name || c.bp_filename}</p>
+            <p class="text-xs text-gray-500 mt-0.5">上傳時間：${fmtTs(c.uploaded_at)}　審查次數：${c.audit_count || 1}</p>
+          </div>
+          <button
+            onclick="deleteCase('${c.meta_id}')"
+            class="shrink-0 text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-2.5 py-1 rounded-lg transition-colors"
+          >刪除</button>
+        </div>
+        <div class="text-xs text-gray-600 space-y-1 border-t pt-2">
+          <p>📄 事業計畫報告書：<span class="text-gray-800">${c.bp_filename}</span></p>
+          ${c.re_filename ? `<p>📄 權利變換計畫報告書：<span class="text-gray-800">${c.re_filename}</span></p>` : ''}
+          ${c.annotated_key
+            ? `<p>🔖 標註審查 PDF：<a href="#" onclick="downloadAnnotated(event,'${c.meta_id}')" class="text-indigo-600 hover:underline">下載</a></p>`
+            : '<p class="text-gray-400">🔖 標註審查 PDF：（尚未產生或版本較舊）</p>'}
+        </div>
+        <div class="pt-1">
+          <button
+            onclick="reaudit('${c.bp_key}', '${c.re_key || ''}')"
+            class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition-colors"
+          >複驗</button>
+        </div>
+      </div>`).join('');
+  }
+
+  async function deleteCase(metaId) {
+    if (!confirm('確定要刪除這筆案件紀錄嗎？')) return;
+    await fetch(`/cases/${metaId}`, { method: 'DELETE' });
+    document.getElementById(`case-${metaId}`)?.remove();
+    await loadHistory();
+  }
+
+  async function downloadAnnotated(e, metaId) {
+    e.preventDefault();
+    const { url } = await fetch(`/cases/${metaId}/download`).then(r => r.json());
+    window.open(url, '_blank');
+  }
+
+  // ── Reaudit ──────────────────────────────────────────────────────────────
+  function showOverlay(title, subtitle) {
+    document.getElementById('overlayTitle').textContent   = title;
+    document.getElementById('overlaySubtitle').textContent = subtitle;
+    document.getElementById('auditOverlay').classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function hideOverlay() {
+    document.getElementById('auditOverlay').classList.add('hidden');
+  }
+
+  async function reaudit(bpKey, reKey) {
+    closeManage();
+    showOverlay('正在複驗中…', '伺服器正在重新讀取 PDF 並執行 OCR，請稍候');
+    try {
+      const form = new FormData();
+      form.append('business_plan_key', bpKey);
+      if (reKey) form.append('rights_exchange_key', reKey);
+      const resp = await fetch('/audit', { method: 'POST', body: form });
+      if (!resp.ok) { hideOverlay(); throw new Error(await resp.text() || '審查失敗'); }
+      document.open(); document.write(await resp.text()); document.close();
+    } catch (err) {
+      hideOverlay();
+      alert('錯誤：' + err.message);
+    }
+  }
+
+  loadHistory();
+
+  document.getElementById('uploadForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn      = document.getElementById('submitBtn');
+    const progress = document.getElementById('progress');
+    btn.disabled   = true;
+    progress.classList.remove('hidden');
+
+    const bpFile = document.getElementById('bpInput').files[0];
+    const reFile = document.getElementById('reInput').files[0] || null;
+
+    try {
+      // Check if S3 is available
+      const probe = await fetch(`/upload-url?filename=probe.pdf`);
+      const useS3 = probe.ok;
+
+      if (useS3) {
+        // ── S3 path: upload files directly, then submit keys ──
+        document.getElementById('progressBp').classList.remove('hidden');
+        setMsg('上傳事業計畫報告書…');
+        const bpKey = await uploadToS3(bpFile, 'progressBpBar', 'progressBpPct');
+
+        let reKey = null;
+        if (reFile) {
+          document.getElementById('progressRe').classList.remove('hidden');
+          setMsg('上傳權利變換計畫報告書…');
+          reKey = await uploadToS3(reFile, 'progressReBar', 'progressRePct');
+        }
+
+        showOverlay('審查中，請稍候…', '伺服器正在解析 PDF 並執行規則檢查');
+        const form = new FormData();
+        form.append('business_plan_key', bpKey);
+        if (reKey) form.append('rights_exchange_key', reKey);
+
+        const resp = await fetch('/audit', { method: 'POST', body: form });
+        if (!resp.ok) {
+          hideOverlay();
+          const err = await resp.text();
+          throw new Error(err || '審查失敗');
+        }
+        document.open(); document.write(await resp.text()); document.close();
+
+      } else {
+        // ── Fallback: classic multipart form submit ──
+        showOverlay('審查中，請稍候…', '大型 PDF 需要約 30 秒，OCR 辨識掃描頁面中');
+        e.target.submit();
+      }
+    } catch (err) {
+      hideOverlay();
+      progress.classList.add('hidden');
+      btn.disabled = false;
+      alert('錯誤：' + err.message);
+    }
   });
 </script>
 </body>
