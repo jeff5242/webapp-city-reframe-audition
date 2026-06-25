@@ -6,8 +6,13 @@ in Phase 2. Text-rich pages are extracted directly (fast path).
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import List
+
+from auditor.parsing_pipeline._path_utils import validate_pdf_path
+
+log = logging.getLogger(__name__)
 
 _MIN_TEXT_CHARS = 30           # pages below this char count are treated as scanned
 _IMAGE_COVERAGE_THRESHOLD = 0.30  # image area / page area — secondary signal
@@ -35,6 +40,8 @@ def triage_pdf(pdf_path: str) -> List[PageClass]:
     except ImportError:
         raise RuntimeError("PyMuPDF (fitz) required for triage. Install: pip install pymupdf")
 
+    pdf_path = validate_pdf_path(pdf_path)
+
     results: List[PageClass] = []
     doc = fitz.open(pdf_path)
     try:
@@ -57,8 +64,8 @@ def triage_pdf(pdf_path: str) -> List[PageClass]:
                 try:
                     for r in page.get_image_rects(xref):
                         image_area += r.get_area()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log.debug("get_image_rects failed for xref %d on page %d: %s", xref, i + 1, exc)
             image_fraction = image_area / page_area
 
             # A page is scanned when it has too few extractable characters.

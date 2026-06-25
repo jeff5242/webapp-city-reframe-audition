@@ -8,7 +8,9 @@ Install:   pip install docling
 """
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
+
+from auditor.parsing_pipeline._path_utils import validate_pdf_path
 
 
 def is_available() -> bool:
@@ -41,6 +43,8 @@ def parse_pdf_to_markdown(
             "docling is required for Phase 2a parsing. Install: pip install docling"
         )
 
+    pdf_path = validate_pdf_path(pdf_path)
+
     pipeline_options = PdfPipelineOptions()
     pipeline_options.do_ocr = False          # OCR handled by Surya (Phase 2b)
     pipeline_options.do_table_structure = True  # Enable table structure recovery
@@ -49,20 +53,35 @@ def parse_pdf_to_markdown(
         format_options={"pdf": PdfFormatOption(pipeline_options=pipeline_options)}
     )
 
-    # Use page_range=(start, end) instead of max_num_pages:
-    # max_num_pages is treated as a hard limit that marks documents
-    # with more pages as invalid; page_range only processes the slice.
-    if page_nums is not None:
-        page_range = (min(page_nums), max(page_nums))
-    else:
-        page_range = None
+    if page_nums is None:
+        result = converter.convert(pdf_path, raises_on_error=False)
+        return result.document.export_to_markdown()
 
-    kwargs = {}
-    if page_range is not None:
-        kwargs["page_range"] = page_range
+    # Split non-contiguous page numbers into contiguous runs and call
+    # Docling once per run.  Using a single (min, max) range would pull in
+    # scanned pages between text pages, contaminating the output.
+    parts: List[str] = []
+    for start, end in _contiguous_runs(page_nums):
+        result = converter.convert(pdf_path, raises_on_error=False, page_range=(start, end))
+        parts.append(result.document.export_to_markdown())
+    return "\n\n".join(parts)
 
-    result = converter.convert(pdf_path, raises_on_error=False, **kwargs)
-    return result.document.export_to_markdown()
+
+def _contiguous_runs(page_nums: List[int]) -> List[Tuple[int, int]]:
+    """Group sorted page numbers into contiguous (start, end) 1-based ranges."""
+    if not page_nums:
+        return []
+    sorted_nums = sorted(set(page_nums))
+    runs: List[Tuple[int, int]] = []
+    start = end = sorted_nums[0]
+    for n in sorted_nums[1:]:
+        if n == end + 1:
+            end = n
+        else:
+            runs.append((start, end))
+            start = end = n
+    runs.append((start, end))
+    return runs
 
 
 def parse_pages_to_markdown(
