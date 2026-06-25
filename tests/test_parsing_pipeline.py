@@ -8,6 +8,12 @@ from __future__ import annotations
 import types
 from unittest.mock import MagicMock, patch
 
+# Reusable patcher: prevents validate_pdf_path from hitting the filesystem
+_mock_validate = patch(
+    "auditor.parsing_pipeline._path_utils.validate_pdf_path",
+    side_effect=lambda p, allowed_dir=None: p,
+)
+
 
 # ── Phase 1: triage ────────────────────────────────────────────────────────────
 
@@ -45,7 +51,7 @@ class TestTriage:
         fitz_mod = MagicMock()
         fitz_mod.open.return_value = doc
 
-        with patch.dict("sys.modules", {"fitz": fitz_mod}):
+        with _mock_validate, patch.dict("sys.modules", {"fitz": fitz_mod}):
             from importlib import reload
             import auditor.parsing_pipeline.triage as mod
             reload(mod)
@@ -64,7 +70,7 @@ class TestTriage:
         fitz_mod = MagicMock()
         fitz_mod.open.return_value = doc
 
-        with patch.dict("sys.modules", {"fitz": fitz_mod}):
+        with _mock_validate, patch.dict("sys.modules", {"fitz": fitz_mod}):
             from importlib import reload
             import auditor.parsing_pipeline.triage as mod
             reload(mod)
@@ -113,7 +119,7 @@ class TestTriage:
         fitz_mod = MagicMock()
         fitz_mod.open.return_value = doc
 
-        with patch.dict("sys.modules", {"fitz": fitz_mod}):
+        with _mock_validate, patch.dict("sys.modules", {"fitz": fitz_mod}):
             from importlib import reload
             import auditor.parsing_pipeline.triage as mod
             reload(mod)
@@ -121,6 +127,78 @@ class TestTriage:
 
         assert [r.page_num for r in results] == [1, 2, 3]
         assert [r.is_scanned for r in results] == [False, True, False]
+
+
+# ── Path validation tests ──────────────────────────────────────────────────────
+
+class TestPathValidation:
+    def test_nonexistent_file_raises(self):
+        from auditor.parsing_pipeline._path_utils import validate_pdf_path
+        import pytest
+        with pytest.raises(FileNotFoundError):
+            validate_pdf_path("/nonexistent/path/file.pdf")
+
+    def test_non_pdf_extension_raises(self, tmp_path):
+        bad = tmp_path / "doc.txt"
+        bad.write_text("hello")
+        import pytest
+        from auditor.parsing_pipeline._path_utils import validate_pdf_path
+        with pytest.raises(ValueError, match=".pdf"):
+            validate_pdf_path(str(bad))
+
+    def test_valid_pdf_returns_resolved_path(self, tmp_path):
+        from auditor.parsing_pipeline._path_utils import validate_pdf_path
+        f = tmp_path / "test.pdf"
+        f.write_bytes(b"%PDF-1.4")
+        result = validate_pdf_path(str(f))
+        assert result == str(f.resolve())
+
+    def test_path_traversal_blocked(self, tmp_path):
+        import pytest
+        from auditor.parsing_pipeline._path_utils import validate_pdf_path
+        allowed = tmp_path / "uploads"
+        allowed.mkdir()
+        outside = tmp_path / "secret.pdf"
+        outside.write_bytes(b"%PDF-1.4")
+        with pytest.raises(ValueError, match="outside the allowed directory"):
+            validate_pdf_path(str(outside), allowed_dir=str(allowed))
+
+    def test_path_inside_allowed_dir_ok(self, tmp_path):
+        from auditor.parsing_pipeline._path_utils import validate_pdf_path
+        allowed = tmp_path / "uploads"
+        allowed.mkdir()
+        f = allowed / "doc.pdf"
+        f.write_bytes(b"%PDF-1.4")
+        result = validate_pdf_path(str(f), allowed_dir=str(allowed))
+        assert result == str(f.resolve())
+
+
+# ── _contiguous_runs tests ─────────────────────────────────────────────────────
+
+class TestContiguousRuns:
+    def test_single_page(self):
+        from auditor.parsing_pipeline.docling_reader import _contiguous_runs
+        assert _contiguous_runs([5]) == [(5, 5)]
+
+    def test_already_contiguous(self):
+        from auditor.parsing_pipeline.docling_reader import _contiguous_runs
+        assert _contiguous_runs([1, 2, 3]) == [(1, 3)]
+
+    def test_non_contiguous(self):
+        from auditor.parsing_pipeline.docling_reader import _contiguous_runs
+        assert _contiguous_runs([2, 7, 15]) == [(2, 2), (7, 7), (15, 15)]
+
+    def test_mixed(self):
+        from auditor.parsing_pipeline.docling_reader import _contiguous_runs
+        assert _contiguous_runs([1, 2, 5, 6, 7, 10]) == [(1, 2), (5, 7), (10, 10)]
+
+    def test_deduplicates(self):
+        from auditor.parsing_pipeline.docling_reader import _contiguous_runs
+        assert _contiguous_runs([3, 3, 4]) == [(3, 4)]
+
+    def test_empty(self):
+        from auditor.parsing_pipeline.docling_reader import _contiguous_runs
+        assert _contiguous_runs([]) == []
 
 
 # ── Phase 2a: docling_reader ───────────────────────────────────────────────────
@@ -182,7 +260,7 @@ class TestDoclingReader:
         po_mod.PdfPipelineOptions = mock_pipeline
         docling_datamodel = types.ModuleType("docling.datamodel")
 
-        with patch.dict("sys.modules", {
+        with _mock_validate, patch.dict("sys.modules", {
             "docling": docling_mod,
             "docling.document_converter": dc_mod,
             "docling.datamodel": docling_datamodel,
@@ -250,7 +328,7 @@ class TestSuryaReader:
         pil_image.frombytes = MagicMock(return_value=MagicMock())
         pil_mod.Image = pil_image
 
-        with patch.dict("sys.modules", {
+        with _mock_validate, patch.dict("sys.modules", {
             "fitz": fitz_mod,
             "surya": surya_mod,
             "surya.ocr": surya_ocr,

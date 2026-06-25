@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Dict, List
 
+from auditor.parsing_pipeline._path_utils import validate_pdf_path
+
 _DEFAULT_DPI = 150
 _SURYA_LANGS = ["zh", "en"]
 
@@ -35,6 +37,8 @@ def ocr_pages(pdf_path: str, page_indices: List[int]) -> Dict[int, str]:
     """
     if not page_indices:
         return {}
+
+    pdf_path = validate_pdf_path(pdf_path)
 
     try:
         from surya.ocr import run_ocr
