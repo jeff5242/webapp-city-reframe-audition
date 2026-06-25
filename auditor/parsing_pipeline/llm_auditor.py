@@ -24,6 +24,9 @@ _MAX_TOKENS = 2048
 ErrorType = Literal["typo", "semantic_contradiction", "regulatory_violation"]
 Severity = Literal["critical", "warning"]
 
+_VALID_ERROR_TYPES = {"typo", "semantic_contradiction", "regulatory_violation"}
+_VALID_SEVERITIES = {"critical", "warning"}
+
 
 @dataclass(frozen=True)
 class LlmFinding:
@@ -92,10 +95,16 @@ def _build_system_prompt(wiki_rules: str) -> str:
 
 def _parse_finding(raw: dict) -> LlmFinding | None:
     try:
+        error_type = raw["error_type"]
+        if error_type not in _VALID_ERROR_TYPES:
+            raise ValueError(f"Unknown error_type: {error_type!r}")
+        severity = raw["severity"]
+        if severity not in _VALID_SEVERITIES:
+            raise ValueError(f"Unknown severity: {severity!r}")
         return LlmFinding(
             rule_id=str(raw["rule_id"]),
-            error_type=raw["error_type"],
-            severity=raw["severity"],
+            error_type=error_type,
+            severity=severity,
             detected_text=str(raw["detected_text"]),
             suggested_text=str(raw.get("suggested_text", "")),
             reason=str(raw["reason"]),
