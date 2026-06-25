@@ -49,16 +49,20 @@ def parse_pdf_to_markdown(
         format_options={"pdf": PdfFormatOption(pipeline_options=pipeline_options)}
     )
 
-    result = converter.convert(pdf_path)
-    markdown = result.document.export_to_markdown()
-
+    # Use page_range=(start, end) instead of max_num_pages:
+    # max_num_pages is treated as a hard limit that marks documents
+    # with more pages as invalid; page_range only processes the slice.
     if page_nums is not None:
-        # Docling converts the whole document; filter by page if needed.
-        # This is a best-effort extraction — full page-level filtering
-        # requires iterating Docling's element tree (future enhancement).
-        pass
+        page_range = (min(page_nums), max(page_nums))
+    else:
+        page_range = None
 
-    return markdown
+    kwargs = {}
+    if page_range is not None:
+        kwargs["page_range"] = page_range
+
+    result = converter.convert(pdf_path, raises_on_error=False, **kwargs)
+    return result.document.export_to_markdown()
 
 
 def parse_pages_to_markdown(
