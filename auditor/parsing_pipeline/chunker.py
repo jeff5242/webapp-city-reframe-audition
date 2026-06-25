@@ -90,16 +90,19 @@ def _chunk_fallback(markdown: str) -> List[DocumentChunk]:
     chunks: List[DocumentChunk] = []
 
     current_title = ""
-    parent_title: str | None = None
+    current_level = 0
     current_lines: List[str] = []
-    title_level = 0
+    # Ancestor stack: entries are (level, title) of proper ANCESTORS of current_title.
+    # current_title itself is never in the stack while its content is accumulating.
+    ancestor_stack: List[tuple] = []
 
     def _flush() -> None:
         text = "".join(current_lines).strip()
         if text:
+            parent = ancestor_stack[-1][1] if ancestor_stack else None
             chunks.append(DocumentChunk(
                 section_title=current_title,
-                parent_title=parent_title,
+                parent_title=parent,
                 text=text,
                 char_count=len(text),
             ))
@@ -108,15 +111,20 @@ def _chunk_fallback(markdown: str) -> List[DocumentChunk]:
         m = _HEADING_RE.match(line.rstrip("\n"))
         if m:
             _flush()
-            level = len(m.group(1))
-            heading = m.group(2).strip()
-            if level <= 1:
-                parent_title = None
-                title_level = level
-            elif level > title_level:
-                parent_title = current_title
-            current_title = heading
-            title_level = level
+            new_level = len(m.group(1))
+            new_heading = m.group(2).strip()
+
+            # Remove stack entries that are siblings or descendants of new_heading
+            while ancestor_stack and ancestor_stack[-1][0] >= new_level:
+                ancestor_stack.pop()
+
+            # Push the outgoing heading onto the stack only if it is a proper
+            # ancestor of the incoming heading (i.e. its level is shallower)
+            if current_level > 0 and current_level < new_level:
+                ancestor_stack.append((current_level, current_title))
+
+            current_title = new_heading
+            current_level = new_level
             current_lines = [line]
         else:
             current_lines.append(line)
