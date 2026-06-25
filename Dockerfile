@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev \
     zlib1g-dev \
     nginx \
+    libxcb1 \
+    libglib2.0-0 \
+    libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies first (layer cache)
@@ -23,7 +26,8 @@ RUN pip install --no-cache-dir \
     "boto3>=1.34.0" \
     "python-dotenv>=1.0.0" \
     "easyocr>=1.7.0" \
-    "pillow>=10.0.0"
+    "pillow>=10.0.0" \
+    "docling>=2.0.0"
 
 # Pre-download EasyOCR models so container startup is fast (no internet needed at runtime)
 RUN python3 -c "import easyocr; easyocr.Reader(['ch_tra', 'en'], gpu=False, verbose=False)" || true
