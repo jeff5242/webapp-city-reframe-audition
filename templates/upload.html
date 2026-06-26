@@ -265,8 +265,9 @@
     <div class="bg-amber-50 border border-amber-200 rounded-xl p-5">
       <h3 class="text-sm font-semibold text-amber-800 mb-4">POC 功能邊界說明</h3>
 
+      <!-- 規則引擎 -->
       <div class="mb-4">
-        <p class="text-xs font-semibold text-amber-800 mb-2">✅ 本版本已涵蓋（純規則，零 API 費用）</p>
+        <p class="text-xs font-semibold text-amber-800 mb-2">✅ 本版本已涵蓋 — 規則引擎（零 API 費用）</p>
         <ul class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-amber-800">
           <li>• 文件完整性（4 條）</li>
           <li>• 審議資料表欄位核對（3 條）</li>
@@ -274,24 +275,43 @@
           <li>• 個資風險掃描（Regex）</li>
           <li>• 法定用詞錯誤清單比對（15 個詞）</li>
           <li>• 審議資料表 vs 主文數字一致性</li>
-          <li>• 報核日期自動選擇審查法規版本</li>
+          <li>• 報核日期自動選擇審查法規版本（107/108/111/113 年版）</li>
           <li>• 兩份文件（事業計畫 + 權利變換）分開上傳</li>
           <li>• 版次變更差異比對（SQLite 歷史記錄）</li>
-          <li>• 標註 PDF 下載（pymupdf 標記問題頁）</li>
+          <li>• 標註 PDF 下載（PyMuPDF 標記問題頁）</li>
           <li>• 檔案 AES-256 加密儲存於 S3，解密僅限授權伺服器</li>
+          <li>• 法規知識庫 Wiki（107/108/111/113 年版對照，逐年修訂 diff）</li>
         </ul>
       </div>
 
+      <!-- AI 語意審查 -->
+      <div class="mb-4 border-t border-amber-200 pt-4">
+        <p class="text-xs font-semibold text-amber-800 mb-2">✅ 本版本已涵蓋 — AI 語意審查（需 ANTHROPIC_API_KEY）</p>
+        <ul class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-amber-800">
+          <li>• 文字頁 / 掃描頁自動分流（Docling 結構解析 + Surya OCR）</li>
+          <li>• LLM 全文語意掃描（Claude Haiku）：錯別字、語意矛盾、法規違反</li>
+          <li>• 結構欄位自動抽取與驗證：容積獎勵上限（≤ 40%）、同意比率、報核日期一致性</li>
+          <li>• 高風險發現 Sonnet 二次驗證</li>
+          <li>• 同意比率門檻依版本切換（111年：≥ 2/3 / 3/4；113年：≥ 4/5 / 4/5）</li>
+          <li>• AI 發現與規則引擎發現合併顯示於同一份報告</li>
+        </ul>
+      </div>
+
+      <!-- 下一階段 -->
       <div class="border-t border-amber-200 pt-4">
-        <p class="text-xs font-semibold text-gray-500 mb-2">📋 後續版本（已記錄，暫緩實作）</p>
+        <p class="text-xs font-semibold text-gray-500 mb-2">📋 下一階段（暫緩實作）</p>
         <ul class="space-y-2 text-xs">
           <li class="flex gap-2 items-start">
-            <span class="text-gray-400 shrink-0">④</span>
-            <div><span class="font-medium text-gray-600">法規知識庫管理系統</span><span class="text-gray-400 ml-1">— 持續上傳法規資料、RAG 查詢、角色權限控管（局處首長／科長／科員）</span></div>
+            <span class="text-gray-400 shrink-0">①</span>
+            <div><span class="font-medium text-gray-600">跨文件欄位比對</span><span class="text-gray-400 ml-1">— 事業計畫書 vs 權利變換計畫書數字一致性驗證</span></div>
           </li>
           <li class="flex gap-2 items-start">
-            <span class="text-gray-400 shrink-0">⑤</span>
-            <div><span class="font-medium text-gray-600">LLM 擴充審查</span><span class="text-gray-400 ml-1">— 真實錯別字、章節邏輯一致性、掃描式 PDF（需 OCR）</span></div>
+            <span class="text-gray-400 shrink-0">②</span>
+            <div><span class="font-medium text-gray-600">AI 發現標註至 PDF</span><span class="text-gray-400 ml-1">— 目前僅規則引擎發現有紅框標記，AI 發現尚未標注</span></div>
+          </li>
+          <li class="flex gap-2 items-start">
+            <span class="text-gray-400 shrink-0">③</span>
+            <div><span class="font-medium text-gray-600">法規知識庫管理系統</span><span class="text-gray-400 ml-1">— RAG 查詢、角色權限控管（局處首長／科長／科員）</span></div>
           </li>
         </ul>
       </div>
