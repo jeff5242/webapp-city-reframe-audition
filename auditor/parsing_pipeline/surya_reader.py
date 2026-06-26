@@ -8,12 +8,42 @@ Install:   pip install surya-ocr
 """
 from __future__ import annotations
 
-from typing import Dict, List
+import threading
+from typing import Dict, List, Optional
 
 from auditor.parsing_pipeline._path_utils import validate_pdf_path
 
 _DEFAULT_DPI = 150
 _SURYA_LANGS = ["zh", "en"]
+
+# Module-level singleton: models are loaded once and reused across calls.
+# Protected by a lock so concurrent FastAPI requests don't double-load.
+_models_lock = threading.Lock()
+_det_model = None
+_det_processor = None
+_rec_model = None
+_rec_processor = None
+
+
+def _get_models():
+    """Load Surya models on first call; return cached instances thereafter."""
+    global _det_model, _det_processor, _rec_model, _rec_processor
+    if _det_model is not None:
+        return _det_model, _det_processor, _rec_model, _rec_processor
+    with _models_lock:
+        if _det_model is not None:   # re-check after acquiring lock
+            return _det_model, _det_processor, _rec_model, _rec_processor
+        from surya.model.detection.model import (
+            load_model as load_det_model,
+            load_processor as load_det_processor,
+        )
+        from surya.model.recognition.model import load_model as load_rec_model
+        from surya.model.recognition.processor import load_processor as load_rec_processor
+        _det_processor = load_det_processor()
+        _det_model = load_det_model()
+        _rec_model = load_rec_model()
+        _rec_processor = load_rec_processor()
+    return _det_model, _det_processor, _rec_model, _rec_processor
 
 
 def is_available() -> bool:
@@ -42,12 +72,6 @@ def ocr_pages(pdf_path: str, page_indices: List[int]) -> Dict[int, str]:
 
     try:
         from surya.ocr import run_ocr
-        from surya.model.detection.model import (
-            load_model as load_det_model,
-            load_processor as load_det_processor,
-        )
-        from surya.model.recognition.model import load_model as load_rec_model
-        from surya.model.recognition.processor import load_processor as load_rec_processor
     except ImportError:
         raise ImportError(
             "surya-ocr is required for Phase 2b OCR. Install: pip install surya-ocr"
@@ -78,11 +102,8 @@ def ocr_pages(pdf_path: str, page_indices: List[int]) -> Dict[int, str]:
     if not images:
         return {}
 
-    # --- Load Surya models (singleton-style — Surya caches internally) ---
-    det_processor = load_det_processor()
-    det_model = load_det_model()
-    rec_model = load_rec_model()
-    rec_processor = load_rec_processor()
+    # --- Load Surya models (singleton — loaded once, reused across calls) ---
+    det_model, det_processor, rec_model, rec_processor = _get_models()
 
     langs = [_SURYA_LANGS] * len(images)
     predictions = run_ocr(images, langs, det_model, det_processor, rec_model, rec_processor)
