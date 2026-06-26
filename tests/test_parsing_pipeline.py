@@ -389,6 +389,33 @@ class TestChunker:
         sub = next(c for c in chunks if c.section_title == "子章節")
         assert sub.parent_title == "主章節"
 
+    def test_fallback_heading_level_stepback(self):
+        """## D after ### C must have the same parent as ## B, not C."""
+        from auditor.parsing_pipeline.chunker import _chunk_fallback
+
+        md = (
+            "# A\n\nA 內容\n\n"
+            "## B\n\nB 內容\n\n"
+            "### C\n\nC 內容\n\n"
+            "## D\n\nD 內容\n"
+        )
+        chunks = _chunk_fallback(md)
+        by_title = {c.section_title: c for c in chunks}
+
+        assert by_title["B"].parent_title == "A"
+        assert by_title["C"].parent_title == "B"
+        assert by_title["D"].parent_title == "A"   # regression: was "C" before fix
+
+    def test_fallback_sibling_headings_same_parent(self):
+        """Two ## headings under the same # must both have that # as parent."""
+        from auditor.parsing_pipeline.chunker import _chunk_fallback
+
+        md = "# 章節\n\n內容\n\n## 子A\n\nA 內容\n\n## 子B\n\nB 內容\n"
+        chunks = _chunk_fallback(md)
+        by_title = {c.section_title: c for c in chunks}
+        assert by_title["子A"].parent_title == "章節"
+        assert by_title["子B"].parent_title == "章節"
+
     def test_fallback_empty_markdown_returns_empty(self):
         from auditor.parsing_pipeline.chunker import _chunk_fallback
         assert _chunk_fallback("") == []
@@ -460,6 +487,24 @@ class TestLlmAuditor:
         from auditor.parsing_pipeline.llm_auditor import _parse_finding
         assert _parse_finding({}) is None
         assert _parse_finding({"rule_id": "X"}) is None
+
+    def test_parse_finding_invalid_error_type_returns_none(self):
+        from auditor.parsing_pipeline.llm_auditor import _parse_finding
+        raw = {
+            "rule_id": "X", "error_type": "injection_attempt",
+            "severity": "critical", "detected_text": "x",
+            "suggested_text": "y", "reason": "z", "page_number": 1,
+        }
+        assert _parse_finding(raw) is None
+
+    def test_parse_finding_invalid_severity_returns_none(self):
+        from auditor.parsing_pipeline.llm_auditor import _parse_finding
+        raw = {
+            "rule_id": "X", "error_type": "typo",
+            "severity": "blocker", "detected_text": "x",
+            "suggested_text": "y", "reason": "z", "page_number": 1,
+        }
+        assert _parse_finding(raw) is None
 
     def test_audit_chunks_sorted_by_page(self):
         from auditor.parsing_pipeline.llm_auditor import audit_chunks
