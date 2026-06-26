@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 import tempfile
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
+
+log = logging.getLogger(__name__)
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -31,11 +35,106 @@ from .s3 import (
 from .wiki import load_all_wiki
 from .extractors.review_table import extract_review_table
 from .extractors.term_checker import extract_number_contexts, scan_for_wrong_terms
-from .models import AuditData, AuditReport, FindingDiff
+from .models import AiFinding, AuditData, AuditReport, FindingDiff
 from .reporters.html_reporter import generate_report
 from .rules.engine import build_default_engine
 from .storage.history import get_prev_run, init_db, save_run
 from .version_selector import select_version
+
+_DOCS_DIR = Path(__file__).parent.parent / "docs"
+
+
+def _load_wiki_rules() -> str:
+    wiki_path = _DOCS_DIR / "urban-renewal-111-wiki.md"
+    try:
+        text = wiki_path.read_text(encoding="utf-8")
+        return text[:3000]
+    except OSError:
+        return "臺北市都市更新111年版法規重點（都更條例、容積獎勵辦法）"
+
+
+def _run_ai_pipeline(pdf_path: str) -> List[AiFinding]:
+    """Run Track B AI pipeline; returns [] when key absent or any step fails."""
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return []
+
+    try:
+        from .parsing_pipeline.triage import triage_pdf, text_page_indices, scanned_page_indices
+        from .parsing_pipeline.chunker import chunk_markdown
+        from .parsing_pipeline.llm_auditor import audit_chunks
+        from .parsing_pipeline.field_auditor import extract_and_validate
+    except ImportError as exc:
+        log.warning("Track B pipeline unavailable: %s", exc)
+        return []
+
+    wiki_rules = _load_wiki_rules()
+    ai_findings: List[AiFinding] = []
+
+    try:
+        page_classes = triage_pdf(pdf_path)
+        text_pages = text_page_indices(page_classes)
+        scanned_pages = scanned_page_indices(page_classes)
+
+        parts: List[str] = []
+
+        if text_pages:
+            try:
+                from .parsing_pipeline.docling_reader import parse_pages_to_markdown
+                md = parse_pages_to_markdown(pdf_path, text_pages)
+                if md.strip():
+                    parts.append(md)
+            except Exception as exc:
+                log.debug("Docling unavailable or failed: %s", exc)
+
+        if scanned_pages:
+            try:
+                from .parsing_pipeline.surya_reader import ocr_pages
+                ocr_result = ocr_pages(pdf_path, scanned_pages)
+                if ocr_result:
+                    parts.append("\n".join(ocr_result.values()))
+            except Exception as exc:
+                log.debug("Surya unavailable or failed: %s", exc)
+
+        combined_md = "\n\n".join(parts)
+        if not combined_md.strip():
+            return []
+
+        chunks = chunk_markdown(combined_md)
+
+        try:
+            for f in audit_chunks(chunks, wiki_rules):
+                ai_findings.append(AiFinding(
+                    source="llm",
+                    rule_id=f.rule_id,
+                    severity=f.severity,
+                    field_name=f.error_type,
+                    detected_text=f.detected_text,
+                    reason=f.reason,
+                    page_number=f.page_number,
+                ))
+        except Exception as exc:
+            log.error("LLM audit error: %s", exc)
+
+        try:
+            _, field_findings = extract_and_validate(combined_md)
+            for f in field_findings:
+                ai_findings.append(AiFinding(
+                    source="field",
+                    rule_id=f.rule_id,
+                    severity=f.severity,
+                    field_name=f.field_name,
+                    detected_text=f.actual_value,
+                    reason=f.reason,
+                    page_number=f.page_number,
+                ))
+        except Exception as exc:
+            log.error("Field audit error: %s", exc)
+
+    except Exception as exc:
+        log.error("Track B pipeline error: %s", exc)
+
+    return ai_findings
+
 
 app = FastAPI(
     title="臺北市都市更新審議自動審查",
@@ -237,6 +336,9 @@ async def audit(
             ]),
         )
 
+        # --- Track B AI pipeline (optional, requires ANTHROPIC_API_KEY) ---
+        ai_findings = _run_ai_pipeline(primary_pdf)
+
         # --- PDF annotation ---
         annotated_key: Optional[str] = None
         annotated_s3_key: Optional[str] = None
@@ -280,6 +382,7 @@ async def audit(
             diffs=diffs,
             prev_audit_time=prev_audit_time,
             annotated_pdf_key=annotated_key,
+            ai_findings=ai_findings,
         )
 
         html = generate_report(report)
