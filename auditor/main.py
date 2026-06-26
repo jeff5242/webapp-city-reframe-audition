@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import tempfile
 import uuid
 from datetime import datetime
@@ -42,6 +43,17 @@ from .storage.history import get_prev_run, init_db, save_run
 from .version_selector import select_version
 
 _DOCS_DIR = Path(__file__).parent.parent / "docs"
+
+
+def _date_from_filename(filename: str) -> str | None:
+    """Extract ROC date from filenames like '1131114【案名】' (YYYMMDD = 113年11月14日)."""
+    m = re.search(r'(?:^|[_\-\s])(\d{3})(\d{2})(\d{2})(?:[^0-9]|$)', filename)
+    if not m:
+        return None
+    y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if 100 <= y <= 130 and 1 <= mo <= 12 and 1 <= d <= 31:
+        return f"{y}年{mo}月{d}日"
+    return None
 
 
 def _load_wiki_rules() -> str:
@@ -295,12 +307,13 @@ async def audit(
         findings = _engine.evaluate(audit_data)
 
         # --- Version selection: prefer 報核日期 from 申請書/切結書/委託書 ---
-        # Fall back to 填表日期 from 審議資料表 if front-doc date not found
+        # Fallback chain: front-doc date → review-table fill_date → filename date
         report_date_roc: Optional[str] = (
             front_docs.report_date if front_docs and front_docs.report_date else None
         )
         fill_date_fallback = review_table.fill_date if review_table else None
-        version_date = report_date_roc or fill_date_fallback
+        filename_date_fallback = _date_from_filename(bp_filename)
+        version_date = report_date_roc or fill_date_fallback or filename_date_fallback
         reg_version, fill_date_iso = select_version(version_date)
 
         # --- Case name & audit metadata ---
@@ -361,9 +374,15 @@ async def audit(
         if report_date_roc and front_docs:
             rd_source = front_docs.report_date_source
             rd_page   = front_docs.report_date_page
-        else:
+        elif fill_date_fallback:
             rd_source = "審議資料表（填表日期）"
             rd_page   = review_table.raw_page if review_table else None
+        elif filename_date_fallback:
+            rd_source = "檔名日期（自動辨識）"
+            rd_page   = None
+        else:
+            rd_source = None
+            rd_page   = None
 
         report = AuditReport(
             case_name=case_name,
