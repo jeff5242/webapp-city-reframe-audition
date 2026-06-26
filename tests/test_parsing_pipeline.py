@@ -572,3 +572,117 @@ class TestLlmAuditor:
         f = LlmFinding("R", "typo", "warning", "x", "y", "z", 1)
         with pytest.raises((AttributeError, TypeError)):
             f.rule_id = "changed"  # type: ignore
+
+    # ── verify_critical path ──────────────────────────────────────────────────
+
+    def _make_critical_data(self):
+        return [{
+            "rule_id": "LAW-001", "error_type": "regulatory_violation",
+            "severity": "critical", "detected_text": "違規內容",
+            "suggested_text": "正確內容", "reason": "違反第65條", "page_number": 5,
+        }]
+
+    def test_verify_critical_keeps_confirmed_finding(self):
+        """Critical finding kept when Sonnet returns non-empty (confirmed)."""
+        haiku_resp = self._make_anthropic_response(self._make_critical_data())
+        sonnet_resp = self._make_anthropic_response(self._make_critical_data())
+
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = [haiku_resp, sonnet_resp]
+        anthropic_mod = types.ModuleType("anthropic")
+        anthropic_mod.Anthropic = MagicMock(return_value=mock_client)
+
+        with patch.dict("sys.modules", {"anthropic": anthropic_mod}):
+            from importlib import reload
+            import auditor.parsing_pipeline.llm_auditor as mod
+            reload(mod)
+            results = mod.audit_chunks(
+                [self._make_chunk()], wiki_rules="", verify_critical=True
+            )
+
+        assert len(results) == 1
+        assert results[0].rule_id == "LAW-001"
+        assert mock_client.messages.create.call_count == 2  # Haiku + Sonnet
+
+    def test_verify_critical_drops_refuted_finding(self):
+        """Critical finding dropped when Sonnet returns empty (refuted)."""
+        haiku_resp = self._make_anthropic_response(self._make_critical_data())
+        sonnet_resp = self._make_anthropic_response([])  # empty → refuted
+
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = [haiku_resp, sonnet_resp]
+        anthropic_mod = types.ModuleType("anthropic")
+        anthropic_mod.Anthropic = MagicMock(return_value=mock_client)
+
+        with patch.dict("sys.modules", {"anthropic": anthropic_mod}):
+            from importlib import reload
+            import auditor.parsing_pipeline.llm_auditor as mod
+            reload(mod)
+            results = mod.audit_chunks(
+                [self._make_chunk()], wiki_rules="", verify_critical=True
+            )
+
+        assert results == []
+        assert mock_client.messages.create.call_count == 2
+
+    def test_verify_critical_skips_sonnet_for_warnings(self):
+        """Warning findings are never sent to Sonnet for verification."""
+        warning_data = [{
+            "rule_id": "TERM-001", "error_type": "typo",
+            "severity": "warning", "detected_text": "x",
+            "suggested_text": "y", "reason": "z", "page_number": 1,
+        }]
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = self._make_anthropic_response(warning_data)
+        anthropic_mod = types.ModuleType("anthropic")
+        anthropic_mod.Anthropic = MagicMock(return_value=mock_client)
+
+        with patch.dict("sys.modules", {"anthropic": anthropic_mod}):
+            from importlib import reload
+            import auditor.parsing_pipeline.llm_auditor as mod
+            reload(mod)
+            results = mod.audit_chunks(
+                [self._make_chunk()], wiki_rules="", verify_critical=True
+            )
+
+        assert len(results) == 1
+        assert mock_client.messages.create.call_count == 1  # Haiku only
+
+    def test_verify_critical_sonnet_exception_keeps_finding(self):
+        """Sonnet API error during verify keeps the finding (safe fallback)."""
+        haiku_resp = self._make_anthropic_response(self._make_critical_data())
+
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = [haiku_resp, RuntimeError("timeout")]
+        anthropic_mod = types.ModuleType("anthropic")
+        anthropic_mod.Anthropic = MagicMock(return_value=mock_client)
+
+        with patch.dict("sys.modules", {"anthropic": anthropic_mod}):
+            from importlib import reload
+            import auditor.parsing_pipeline.llm_auditor as mod
+            reload(mod)
+            results = mod.audit_chunks(
+                [self._make_chunk()], wiki_rules="", verify_critical=True
+            )
+
+        assert len(results) == 1  # kept despite Sonnet failure
+
+    def test_verify_critical_false_does_not_call_sonnet(self):
+        """Default verify_critical=False must never trigger Sonnet call."""
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = self._make_anthropic_response(
+            self._make_critical_data()
+        )
+        anthropic_mod = types.ModuleType("anthropic")
+        anthropic_mod.Anthropic = MagicMock(return_value=mock_client)
+
+        with patch.dict("sys.modules", {"anthropic": anthropic_mod}):
+            from importlib import reload
+            import auditor.parsing_pipeline.llm_auditor as mod
+            reload(mod)
+            results = mod.audit_chunks(
+                [self._make_chunk()], wiki_rules="", verify_critical=False
+            )
+
+        assert len(results) == 1
+        assert mock_client.messages.create.call_count == 1  # Haiku only

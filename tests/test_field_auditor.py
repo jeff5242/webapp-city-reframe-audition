@@ -168,6 +168,60 @@ class TestDateConsistency:
         assert validate_fields(_fields()) == []
 
 
+# ── validate_fields — 法規版本切換 ────────────────────────────────────────────
+
+class TestRegYearThresholds:
+    """Verify that consent thresholds differ correctly across regulation years."""
+
+    def test_111_year_owner_threshold(self):
+        # 2/3 ≈ 66.67%; value just below threshold → finding
+        f = _fields(consent_ratio=_consent(owner_pct=66.0, area_pct=80.0))
+        findings = validate_fields(f, reg_year="111")
+        assert any(ff.rule_id == "LAW-CON-001" for ff in findings)
+
+    def test_111_year_owner_passes_at_threshold(self):
+        from auditor.parsing_pipeline.field_auditor import _CONSENT_THRESHOLDS
+        owner_min, _ = _CONSENT_THRESHOLDS["111"]
+        f = _fields(consent_ratio=_consent(owner_pct=owner_min, area_pct=80.0))
+        assert not any(ff.rule_id == "LAW-CON-001" for ff in validate_fields(f, reg_year="111"))
+
+    def test_113_year_owner_threshold_higher(self):
+        # 113年門檻 80%；70% passes for 111 but fails for 113
+        f = _fields(consent_ratio=_consent(owner_pct=70.0, area_pct=85.0))
+        assert validate_fields(f, reg_year="111") == []
+        findings_113 = validate_fields(f, reg_year="113")
+        assert any(ff.rule_id == "LAW-CON-001" for ff in findings_113)
+
+    def test_113_year_area_threshold_higher(self):
+        # 113年面積門檻 80%；75% passes for 111 but fails for 113
+        f = _fields(consent_ratio=_consent(owner_pct=85.0, area_pct=75.0))
+        assert validate_fields(f, reg_year="111") == []
+        findings_113 = validate_fields(f, reg_year="113")
+        assert any(ff.rule_id == "LAW-CON-002" for ff in findings_113)
+
+    def test_113_year_both_at_80_no_finding(self):
+        f = _fields(consent_ratio=_consent(owner_pct=80.0, area_pct=80.0))
+        assert validate_fields(f, reg_year="113") == []
+
+    def test_107_same_as_111(self):
+        # 107/108 thresholds match 111
+        f = _fields(consent_ratio=_consent(owner_pct=66.0, area_pct=80.0))
+        assert validate_fields(f, reg_year="107") != []
+        assert validate_fields(f, reg_year="108") != []
+
+    def test_unknown_year_falls_back_to_111(self):
+        f = _fields(consent_ratio=_consent(owner_pct=66.0, area_pct=80.0))
+        findings_unknown = validate_fields(f, reg_year="999")
+        findings_111 = validate_fields(f, reg_year="111")
+        assert [ff.rule_id for ff in findings_unknown] == [ff.rule_id for ff in findings_111]
+
+    def test_finding_message_contains_correct_threshold(self):
+        f = _fields(consent_ratio=_consent(owner_pct=70.0, area_pct=85.0))
+        findings = validate_fields(f, reg_year="113")
+        owner_finding = next(ff for ff in findings if ff.rule_id == "LAW-CON-001")
+        assert "80.00%" in owner_finding.expected
+
+
 # ── _parse_extracted ──────────────────────────────────────────────────────────
 
 class TestParseExtracted:

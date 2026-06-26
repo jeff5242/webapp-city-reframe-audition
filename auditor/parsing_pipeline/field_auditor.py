@@ -152,20 +152,43 @@ _SYSTEM_PROMPT = """\
 
 # ── Validation rules ──────────────────────────────────────────────────────────
 
-# 都更條例第65條：容積獎勵合計上限
+# 都更條例第65條：容積獎勵合計上限（各版本相同）
 _BONUS_CAP_PCT = 40.0
 
-# 都更條例第22條：重建類型同意門檻
-_CONSENT_OWNER_MIN_PCT = 200.0 / 3  # ≥ 2/3 ≈ 66.67%
-_CONSENT_AREA_MIN_PCT = 75.0        # ≥ 3/4
+# 都更條例第22條重建同意門檻，依版本年度不同：
+#   107/108/111年：土地所有權人 ≥ 2/3、土地面積 ≥ 3/4
+#   113年        ：土地所有權人 ≥ 4/5、土地面積 ≥ 4/5（113年1月修正）
+_CONSENT_THRESHOLDS: dict = {
+    "107": (200.0 / 3, 75.0),   # owner ≥ 2/3, area ≥ 3/4
+    "108": (200.0 / 3, 75.0),
+    "111": (200.0 / 3, 75.0),
+    "113": (80.0, 80.0),        # owner ≥ 4/5, area ≥ 4/5
+}
+_DEFAULT_REG_YEAR = "111"
+
+# Module-level constants kept for backwards compatibility with existing tests
+_CONSENT_OWNER_MIN_PCT = 200.0 / 3
+_CONSENT_AREA_MIN_PCT = 75.0
 
 
-def validate_fields(fields: ExtractedFields) -> List[FieldFinding]:
-    """Apply 111-year regulatory rules to extracted fields.
+def _consent_thresholds(reg_year: str) -> tuple[float, float]:
+    """Return (owner_min_pct, area_min_pct) for *reg_year*."""
+    return _CONSENT_THRESHOLDS.get(reg_year, _CONSENT_THRESHOLDS[_DEFAULT_REG_YEAR])
+
+
+def validate_fields(
+    fields: ExtractedFields,
+    reg_year: str = _DEFAULT_REG_YEAR,
+) -> List[FieldFinding]:
+    """Apply regulatory rules for *reg_year* to extracted fields.
+
+    *reg_year* must be one of "107", "108", "111", "113".
+    Unknown years fall back to 111-year thresholds.
 
     Returns a list of FieldFinding; empty list means no violations found.
     """
     findings: List[FieldFinding] = []
+    owner_min, area_min = _consent_thresholds(reg_year)
 
     # ── 容積獎勵上限 ──────────────────────────────────────────────────────
     if fields.bonus_total_pct is not None:
@@ -182,7 +205,6 @@ def validate_fields(fields: ExtractedFields) -> List[FieldFinding]:
                 ),
             ))
     elif fields.bonus_items:
-        # 自行加總
         computed = sum(b.rate_pct for b in fields.bonus_items)
         if computed > _BONUS_CAP_PCT:
             findings.append(FieldFinding(
@@ -200,29 +222,29 @@ def validate_fields(fields: ExtractedFields) -> List[FieldFinding]:
     # ── 同意比率 ──────────────────────────────────────────────────────────
     if fields.consent_ratio is not None:
         cr = fields.consent_ratio
-        if cr.owner_count_pct is not None and cr.owner_count_pct < _CONSENT_OWNER_MIN_PCT:
+        if cr.owner_count_pct is not None and cr.owner_count_pct < owner_min:
             findings.append(FieldFinding(
                 field_name="土地所有權人同意比率",
                 rule_id="LAW-CON-001",
                 severity="critical",
                 actual_value=f"{cr.owner_count_pct:.2f}%",
-                expected=f"≥ {_CONSENT_OWNER_MIN_PCT:.2f}%（都更條例第22條第1項）",
+                expected=f"≥ {owner_min:.2f}%（都更條例第22條第1項）",
                 reason=(
                     f"土地所有權人同意比率 {cr.owner_count_pct:.2f}% "
-                    f"未達法定 2/3（{_CONSENT_OWNER_MIN_PCT:.2f}%）門檻。"
+                    f"未達法定門檻 {owner_min:.2f}%。"
                 ),
                 page_number=cr.source_page,
             ))
-        if cr.land_area_pct is not None and cr.land_area_pct < _CONSENT_AREA_MIN_PCT:
+        if cr.land_area_pct is not None and cr.land_area_pct < area_min:
             findings.append(FieldFinding(
                 field_name="土地面積同意比率",
                 rule_id="LAW-CON-002",
                 severity="critical",
                 actual_value=f"{cr.land_area_pct:.2f}%",
-                expected=f"≥ {_CONSENT_AREA_MIN_PCT:.0f}%（都更條例第22條第1項）",
+                expected=f"≥ {area_min:.0f}%（都更條例第22條第1項）",
                 reason=(
                     f"土地面積同意比率 {cr.land_area_pct:.2f}% "
-                    f"未達法定 3/4（{_CONSENT_AREA_MIN_PCT:.0f}%）門檻。"
+                    f"未達法定門檻 {area_min:.0f}%。"
                 ),
                 page_number=cr.source_page,
             ))
@@ -257,6 +279,7 @@ def validate_fields(fields: ExtractedFields) -> List[FieldFinding]:
 def extract_and_validate(
     markdown: str,
     model: str = _DEFAULT_MODEL,
+    reg_year: str = _DEFAULT_REG_YEAR,
 ) -> tuple[ExtractedFields, List[FieldFinding]]:
     """Extract structured fields from *markdown* and validate against rules.
 
@@ -289,7 +312,7 @@ def extract_and_validate(
             break
 
     extracted = _parse_extracted(raw)
-    findings = validate_fields(extracted)
+    findings = validate_fields(extracted, reg_year=reg_year)
     return extracted, findings
 
 
