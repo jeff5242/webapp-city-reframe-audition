@@ -97,6 +97,18 @@ class AuditData:
     number_contexts: Tuple[NumberContext, ...] = field(default_factory=tuple)
 
 
+@dataclass(frozen=True)
+class AiFinding:
+    """Unified AI-generated finding from Track B pipeline."""
+    source: Literal["llm", "field"]
+    rule_id: str
+    severity: Literal["critical", "warning"]
+    field_name: str       # error_type (llm) or field_name (field auditor)
+    detected_text: str    # detected_text or actual_value
+    reason: str
+    page_number: int = 0
+
+
 @dataclass
 class AuditReport:
     case_name: str
@@ -118,6 +130,8 @@ class AuditReport:
     prev_audit_time: Optional[str] = None
     # ③ PDF 標註下載 key
     annotated_pdf_key: Optional[str] = None
+    # ④ Track B AI pipeline findings (empty when ANTHROPIC_API_KEY not set)
+    ai_findings: List["AiFinding"] = field(default_factory=list)
 
     @property
     def critical_fails(self) -> List[Finding]:
