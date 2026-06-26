@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python dependencies first (layer cache)
 COPY pyproject.toml setup.py ./
 RUN pip install --no-cache-dir \
+    "numpy<2" \
     "fastapi>=0.115.0" \
     "uvicorn[standard]>=0.30.0" \
     "pdfplumber>=0.11.0" \
