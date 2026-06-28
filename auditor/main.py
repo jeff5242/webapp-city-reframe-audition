@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from .annotator import annotate_pdf
+from .pii_masker import mask_pii, masking_enabled
 from .extractors.front_docs import extract_front_docs
 from .s3 import (
     delete_case_meta,
@@ -352,18 +353,35 @@ async def audit(
         # --- Track B AI pipeline (optional, requires ANTHROPIC_API_KEY) ---
         ai_findings = _run_ai_pipeline(primary_pdf)
 
-        # --- PDF annotation ---
+        # --- PDF annotation (+ optional PII masking) ---
         annotated_key: Optional[str] = None
         annotated_s3_key: Optional[str] = None
         try:
-            pdf_bytes = annotate_pdf(primary_pdf, findings)
+            annotate_source = primary_pdf
+            masked_bytes: Optional[bytes] = None
+
+            # Apply PII masking first when enabled and HIGH-risk items exist
+            if masking_enabled() and any(r.severity == "HIGH" for r in pii_risks):
+                masked_bytes = mask_pii(primary_pdf, list(pii_risks))
+                with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                    tmp.write(masked_bytes)
+                    annotate_source = tmp.name
+
+            pdf_bytes = annotate_pdf(annotate_source, findings)
             annotated_key = uuid.uuid4().hex[:8]
             _PDF_CACHE[annotated_key] = pdf_bytes
             # Persist to S3 if this is an S3-sourced audit
             if case_meta_id and s3_available():
                 annotated_s3_key = save_annotated_pdf(case_meta_id, pdf_bytes)
         except Exception:
-            pass
+            log.exception("PDF annotation/masking failed")
+        finally:
+            # Clean up temp masked file if created
+            if masked_bytes and annotate_source != primary_pdf:
+                try:
+                    os.unlink(annotate_source)
+                except OSError:
+                    pass
 
         # --- Build document list ---
         documents = [bp_filename]
