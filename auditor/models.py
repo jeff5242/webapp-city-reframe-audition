@@ -132,6 +132,8 @@ class AuditReport:
     annotated_pdf_key: Optional[str] = None
     # ④ Track B AI pipeline findings (empty when ANTHROPIC_API_KEY not set)
     ai_findings: List["AiFinding"] = field(default_factory=list)
+    # ⑤ Peer comparison stats (None when fewer than 2 same-type cases exist)
+    peer_stats: Optional[dict] = None
 
     @property
     def critical_fails(self) -> List[Finding]:
