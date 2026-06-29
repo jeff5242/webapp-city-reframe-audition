@@ -424,17 +424,21 @@ async def audit(
 
         html = generate_report(report)
 
-    # Persist case metadata in S3 for history (files are kept, not deleted)
+    # Persist case metadata in S3 for history (best-effort; never crash the audit)
     if bp_s3_key and s3_available():
-        save_case_meta(
-            bp_key=bp_s3_key,
-            bp_filename=bp_filename,
-            case_name=case_name,
-            meta_id=case_meta_id,
-            re_key=re_s3_key,
-            re_filename=re_filename if re_s3_key else None,
-            annotated_key=annotated_s3_key,
-        )
+        try:
+            save_case_meta(
+                bp_key=bp_s3_key,
+                bp_filename=bp_filename,
+                case_name=case_name,
+                meta_id=case_meta_id,
+                re_key=re_s3_key,
+                re_filename=re_filename if re_s3_key else None,
+                annotated_key=annotated_s3_key,
+            )
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("S3 case-meta save failed (non-fatal): %s", exc)
 
     return HTMLResponse(content=html)
 

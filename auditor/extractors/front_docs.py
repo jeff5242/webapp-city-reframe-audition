@@ -78,28 +78,31 @@ def _extract_roc_date(text: str) -> Optional[str]:
 # Pattern for compact ROC date without 中華民國 prefix (e.g. "依據114年5月28日謄本")
 _COMPACT_DATE_RE = re.compile(r'(\d{3})年(\d{1,2})月(\d{1,2})日')
 
+# Dot-separated date common in timeline tables (e.g. "113.04.30")
+_DOT_DATE_RE = re.compile(r'(\d{3})\.(\d{2})\.(\d{2})')
+
 # Keywords that indicate the date is the filing/report date
 _FILED_DATE_KEYWORDS = ["謄本", "報核", "送件", "申請日", "報核日"]
 
 
 def _extract_filed_date_from_supplement(text: str) -> Optional[str]:
-    """Fallback: infer 報核日期 from supplementary response text.
+    """Fallback: infer 報核日期 from pages with 謄本/報核 keywords.
 
-    When front-doc pages are image-based and unreadable, supplementary
-    committee-response pages often mention the 謄本 date that was used
-    at the time of filing, e.g. '依據114年5月28日謄本修正所有權人'.
-    The 謄本 date is taken at filing and reliably proxies 報核日期.
+    Searches a 30-char window before and 20-char window after each keyword.
+    Handles both 年月日 format and dot format (113.04.30) common in timeline
+    tables like '都市更新事業計畫報核  113.04.30'.
     """
     for kw in _FILED_DATE_KEYWORDS:
-        # Find keyword positions and look backward ≤30 chars for a date
         for match_kw in re.finditer(re.escape(kw), text):
             start = max(0, match_kw.start() - 30)
-            snippet = text[start:match_kw.start() + len(kw) + 5]
-            m = _COMPACT_DATE_RE.search(snippet)
-            if m:
-                y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
-                if 100 <= y <= 130 and 1 <= mo <= 12 and 1 <= d <= 31:
-                    return f"{y}年{mo}月{d}日"
+            end = match_kw.end() + 20
+            snippet = text[start:end]
+            for pattern in (_COMPACT_DATE_RE, _DOT_DATE_RE):
+                m = pattern.search(snippet)
+                if m:
+                    y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                    if 100 <= y <= 130 and 1 <= mo <= 12 and 1 <= d <= 31:
+                        return f"{y}年{mo}月{d}日"
     return None
 
 
@@ -156,7 +159,7 @@ def extract_front_docs(
         import unicodedata
         from ..parsers.ocr_reader import ocr_available, ocr_pages
         if ocr_available():
-            ocr_results = ocr_pages(pdf_path, image_page_indices)
+            ocr_results = ocr_pages(pdf_path, image_page_indices, zoom=3.0)
             for entry in pages:
                 idx = entry["page_num"] - 1
                 if idx in ocr_results and ocr_results[idx].strip():
@@ -198,6 +201,11 @@ def extract_front_docs(
                     )
                     if date:
                         date_by_source[doc_type] = (date, page_num)
+            else:
+                # Unmatched front-section page (e.g. timeline/cover): include in
+                # fallback pool so dot-format 報核 dates in tables can be found.
+                if text.strip():
+                    supplement_texts.append(text)
         else:
             # Supplementary pages (>20): accumulate for fallback date search only
             if text.strip():
