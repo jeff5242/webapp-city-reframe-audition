@@ -88,15 +88,23 @@ _FILED_DATE_KEYWORDS = ["謄本", "報核", "送件", "申請日", "報核日"]
 def _extract_filed_date_from_supplement(text: str) -> Optional[str]:
     """Fallback: infer 報核日期 from pages with 謄本/報核 keywords.
 
-    Searches a 30-char window before and 20-char window after each keyword.
-    Handles both 年月日 format and dot format (113.04.30) common in timeline
-    tables like '都市更新事業計畫報核  113.04.30'.
+    Searches the full line containing each keyword match, so that dot-format
+    dates (113.04.30) in table cells separated by many spaces are found even
+    when they are far to the right of the keyword.  Also searches 30 chars
+    before the keyword for 年月日 format dates like '依據114年5月28日謄本'.
     """
     for kw in _FILED_DATE_KEYWORDS:
         for match_kw in re.finditer(re.escape(kw), text):
-            start = max(0, match_kw.start() - 30)
-            end = match_kw.end() + 20
-            snippet = text[start:end]
+            # Full line containing this keyword (handles wide table columns)
+            line_start = text.rfind('\n', 0, match_kw.start()) + 1
+            line_end_pos = text.find('\n', match_kw.end())
+            line_end = line_end_pos if line_end_pos != -1 else len(text)
+            line = text[line_start:line_end]
+
+            # Also include 30 chars before keyword for backward-format dates
+            before = text[max(0, match_kw.start() - 30): match_kw.end()]
+            snippet = before + line
+
             for pattern in (_COMPACT_DATE_RE, _DOT_DATE_RE):
                 m = pattern.search(snippet)
                 if m:
