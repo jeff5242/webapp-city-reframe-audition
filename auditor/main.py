@@ -352,6 +352,10 @@ async def audit(
 
         # --- Compute and save comparison metrics ---
         _submission_type = review_table.submission_type if review_table else None
+        # If OCR missed the checkbox, infer from upload pattern:
+        # B-1 = both 事業計畫 + 權利變換計畫 submitted together
+        if _submission_type is None and re_s3_key:
+            _submission_type = "B-1"
         _bonus_pct: Optional[float] = None
         if review_table and review_table.bonus_floor_area and review_table.bonus_limit and review_table.bonus_limit > 0:
             _bonus_pct = round(review_table.bonus_floor_area / review_table.bonus_limit * 100, 1)
