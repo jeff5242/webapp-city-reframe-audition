@@ -105,23 +105,30 @@ def _extract_filed_date_from_supplement(text: str) -> Optional[str]:
 
 _FRONT_DOC_MAX_PAGE = 20  # pages beyond this are treated as supplementary material
 
-# ROC date regex for OCR output: accepts partial matches like "114年5月28日"
-# that appear without the "中華民國" prefix (common in OCR of spread layouts)
-_OCR_COMPACT_DATE_RE = re.compile(
-    r'(?:中\s*華\s*民\s*國\s*)?'   # optional prefix
-    r'(\d{3})\s*年\s*'
-    r'(\d{1,2})\s*月\s*'
-    r'(\d{1,2})\s*日'
+# ROC date regex for OCR output.
+# Handles both compact ("113年4月30日") and spaced ("1 1 3 年 0 4 月 3 0 日")
+# forms — the latter is common when official forms print each digit in its own cell.
+_OCR_SPACED_DATE_RE = re.compile(
+    r'(?:中\s*華\s*民\s*國\s*)?'       # optional prefix (with inter-char spaces)
+    r'((?:\d\s*){2,4})年\s*'           # year: 2-4 digits, possibly spaced
+    r'((?:\d\s*){1,2})月\s*'           # month: 1-2 digits
+    r'((?:\d\s*){1,2})日'              # day: 1-2 digits
 )
 
 
 def _extract_roc_date_ocr(text: str) -> Optional[str]:
-    """More permissive date extraction for OCR text (prefix optional)."""
-    m = _OCR_COMPACT_DATE_RE.search(text)
+    """More permissive date extraction for OCR text.
+
+    Handles both compact (113年4月30日) and spaced (1 1 3 年 0 4 月 3 0 日) forms.
+    The spaced form appears when official forms print each digit in a separate box.
+    """
+    m = _OCR_SPACED_DATE_RE.search(text)
     if not m:
         return None
     try:
-        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        y  = int(re.sub(r'\s+', '', m.group(1)))
+        mo = int(re.sub(r'\s+', '', m.group(2)))
+        d  = int(re.sub(r'\s+', '', m.group(3)))
         if 100 <= y <= 130 and 1 <= mo <= 12 and 1 <= d <= 31:
             return f"{y}年{mo}月{d}日"
     except ValueError:
