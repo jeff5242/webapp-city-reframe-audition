@@ -81,6 +81,10 @@ _COMPACT_DATE_RE = re.compile(r'(\d{3})年(\d{1,2})月(\d{1,2})日')
 # Dot-separated date common in timeline tables (e.g. "113.04.30")
 _DOT_DATE_RE = re.compile(r'(\d{3})\.(\d{2})\.(\d{2})')
 
+# Government document reference numbers encode the filing date:
+# e.g. "字第11304300035號" → year=113, month=04, day=30
+_DOC_REF_DATE_RE = re.compile(r'字第(\d{3})(\d{2})(\d{2})\d+\s*號')
+
 # Keywords that indicate the date is the filing/report date
 _FILED_DATE_KEYWORDS = ["謄本", "報核", "送件", "申請日", "報核日"]
 
@@ -229,14 +233,26 @@ def extract_front_docs(
             report_date_source = source
             break
 
-    # Fallback: when front-doc pages are image-based (no date extracted), look
-    # in supplementary response text for 謄本/報核 date references.
+    # Fallback 1: look in text pages for 謄本/報核 date references.
     if report_date is None and supplement_texts:
         combined = "\n".join(supplement_texts)
         fallback_date = _extract_filed_date_from_supplement(combined)
         if fallback_date:
             report_date = fallback_date
             report_date_source = "補正回應（謄本日期）"
+
+    # Fallback 2: decode filing date from government document reference numbers.
+    # e.g. "字第11304300035號" in page headers encodes 113年04月30日.
+    if report_date is None:
+        all_texts = [p["text"] for p in pages if p["text"].strip()]
+        for txt in all_texts:
+            m = _DOC_REF_DATE_RE.search(txt)
+            if m:
+                y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                if 100 <= y <= 130 and 1 <= mo <= 12 and 1 <= d <= 31:
+                    report_date = f"{y}年{mo}月{d}日"
+                    report_date_source = "文號日期"
+                    break
 
     poa_docs = [d for d in docs if d.doc_type == "委託書"]
 
