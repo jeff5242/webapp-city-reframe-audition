@@ -40,7 +40,7 @@ from .extractors.term_checker import extract_number_contexts, scan_for_wrong_ter
 from .models import AiFinding, AuditData, AuditReport, FindingDiff
 from .reporters.html_reporter import generate_report
 from .rules.engine import build_default_engine
-from .storage.history import get_prev_run, init_db, save_run
+from .storage.history import get_prev_run, get_peer_stats, init_db, save_run, save_run_metrics
 from .version_selector import select_version
 
 _DOCS_DIR = Path(__file__).parent.parent / "docs"
@@ -350,6 +350,34 @@ async def audit(
             ]),
         )
 
+        # --- Compute and save comparison metrics ---
+        _submission_type = review_table.submission_type if review_table else None
+        _bonus_pct: Optional[float] = None
+        if review_table and review_table.bonus_floor_area and review_table.bonus_limit and review_table.bonus_limit > 0:
+            _bonus_pct = round(review_table.bonus_floor_area / review_table.bonus_limit * 100, 1)
+        _critical_count = sum(1 for f in findings if f.severity == "critical" and f.status == "fail")
+        _high_count     = sum(1 for f in findings if f.severity == "high" and f.status == "fail")
+        _warn_count     = sum(1 for f in findings if f.status == "warn")
+        _parking_ids    = {"CALC-002", "CALC-003"}
+        _parking_findings = [f for f in findings if f.rule_id in _parking_ids]
+        _parking_pass: Optional[int] = None
+        if _parking_findings:
+            _parking_pass = 1 if all(f.status == "pass" for f in _parking_findings) else 0
+        _pii_high_count = sum(1 for r in pii_risks if r.severity == "HIGH")
+        save_run_metrics(
+            case_name=case_name,
+            submission_type=_submission_type,
+            bonus_pct=_bonus_pct,
+            critical_count=_critical_count,
+            high_count=_high_count,
+            warn_count=_warn_count,
+            parking_pass=_parking_pass,
+            pii_high_count=_pii_high_count,
+        )
+
+        # --- Peer comparison stats ---
+        peer_stats = get_peer_stats(_submission_type)
+
         # --- Track B AI pipeline (optional, requires ANTHROPIC_API_KEY) ---
         ai_findings = _run_ai_pipeline(primary_pdf)
 
@@ -420,6 +448,7 @@ async def audit(
             prev_audit_time=prev_audit_time,
             annotated_pdf_key=annotated_key,
             ai_findings=ai_findings,
+            peer_stats=peer_stats,
         )
 
         html = generate_report(report)

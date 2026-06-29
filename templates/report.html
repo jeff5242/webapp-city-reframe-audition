@@ -276,6 +276,103 @@
   </div>
   {% endif %}
 
+      {# ── Peer comparison panel ── #}
+      {% if report.peer_stats %}
+      {% set ps = report.peer_stats %}
+      {% set st = report.review_table.submission_type if report.review_table else '—' %}
+      <section class="mt-8 bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
+          <h2 class="text-base font-semibold text-gray-800">📊 同類案件比對（{{ st }}，共 {{ ps.count }} 件）</h2>
+          <p class="text-xs text-gray-500 mt-0.5">與歷史審查過的同送審類別案件比較，NULL 表示資料不足</p>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-600 text-xs uppercase">
+              <tr>
+                <th class="px-6 py-3 text-left font-medium">指標</th>
+                <th class="px-6 py-3 text-center font-medium">本案</th>
+                <th class="px-6 py-3 text-center font-medium">同類平均</th>
+                <th class="px-6 py-3 text-center font-medium">評估</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              {# Bonus pct #}
+              {% set my_bonus = (report.review_table.bonus_floor_area / report.review_table.bonus_limit * 100) | round(1) if (report.review_table and report.review_table.bonus_floor_area and report.review_table.bonus_limit and report.review_table.bonus_limit > 0) else none %}
+              <tr class="hover:bg-gray-50">
+                <td class="px-6 py-3 font-medium text-gray-700">容積獎勵佔比</td>
+                <td class="px-6 py-3 text-center">{{ my_bonus ~ '%' if my_bonus is not none else '—' }}</td>
+                <td class="px-6 py-3 text-center text-gray-500">{{ ps.avg_bonus_pct ~ '%' if ps.avg_bonus_pct is not none else '—' }}</td>
+                <td class="px-6 py-3 text-center">
+                  {% if my_bonus is not none and ps.avg_bonus_pct is not none %}
+                    {% if my_bonus > ps.avg_bonus_pct + 3 %}<span class="text-orange-600 font-medium">↑ 高於平均</span>
+                    {% elif my_bonus < ps.avg_bonus_pct - 3 %}<span class="text-green-600 font-medium">↓ 低於平均</span>
+                    {% else %}<span class="text-gray-500">≈ 接近平均</span>{% endif %}
+                  {% else %}—{% endif %}
+                </td>
+              </tr>
+              {# Critical #}
+              {% set my_critical = report.critical_fails | length %}
+              <tr class="hover:bg-gray-50">
+                <td class="px-6 py-3 font-medium text-gray-700">🔴 嚴重缺失</td>
+                <td class="px-6 py-3 text-center">{{ my_critical }}</td>
+                <td class="px-6 py-3 text-center text-gray-500">{{ ps.avg_critical if ps.avg_critical is not none else '—' }}</td>
+                <td class="px-6 py-3 text-center">
+                  {% if ps.avg_critical is not none %}
+                    {% if my_critical > ps.avg_critical %}<span class="text-red-600 font-medium">↑ 高於平均</span>
+                    {% elif my_critical < ps.avg_critical %}<span class="text-green-600 font-medium">↓ 低於平均</span>
+                    {% else %}<span class="text-gray-500">≈ 接近平均</span>{% endif %}
+                  {% else %}—{% endif %}
+                </td>
+              </tr>
+              {# High #}
+              {% set my_high = report.high_fails | length %}
+              <tr class="hover:bg-gray-50">
+                <td class="px-6 py-3 font-medium text-gray-700">🟠 高風險問題</td>
+                <td class="px-6 py-3 text-center">{{ my_high }}</td>
+                <td class="px-6 py-3 text-center text-gray-500">{{ ps.avg_high if ps.avg_high is not none else '—' }}</td>
+                <td class="px-6 py-3 text-center">
+                  {% if ps.avg_high is not none %}
+                    {% if my_high > ps.avg_high %}<span class="text-orange-600 font-medium">↑ 高於平均</span>
+                    {% elif my_high < ps.avg_high %}<span class="text-green-600 font-medium">↓ 低於平均</span>
+                    {% else %}<span class="text-gray-500">≈ 接近平均</span>{% endif %}
+                  {% else %}—{% endif %}
+                </td>
+              </tr>
+              {# Parking #}
+              {% set parking_finding = report.findings | selectattr('rule_id', 'in', ['CALC-002','CALC-003']) | list %}
+              {% set parking_ok = parking_finding | selectattr('status', 'equalto', 'pass') | list | length == parking_finding | length and parking_finding | length > 0 %}
+              <tr class="hover:bg-gray-50">
+                <td class="px-6 py-3 font-medium text-gray-700">停車位符規</td>
+                <td class="px-6 py-3 text-center">{{ '✅ 通過' if parking_ok else ('❌ 未通過' if parking_finding else '—') }}</td>
+                <td class="px-6 py-3 text-center text-gray-500">{{ (ps.parking_pass_rate * 100) | round | int ~ '% 通過' if ps.parking_pass_rate is not none else '—' }}</td>
+                <td class="px-6 py-3 text-center">
+                  {% if ps.parking_pass_rate is not none and parking_finding %}
+                    {% if parking_ok and ps.parking_pass_rate < 1.0 %}<span class="text-green-600 font-medium">✓ 優於平均</span>
+                    {% elif not parking_ok and ps.parking_pass_rate > 0 %}<span class="text-orange-600 font-medium">↓ 低於平均</span>
+                    {% else %}<span class="text-gray-500">≈ 與平均相同</span>{% endif %}
+                  {% else %}—{% endif %}
+                </td>
+              </tr>
+              {# PII #}
+              {% set my_pii = report.high_risk_pii | length %}
+              <tr class="hover:bg-gray-50">
+                <td class="px-6 py-3 font-medium text-gray-700">高風險個資</td>
+                <td class="px-6 py-3 text-center">{{ my_pii }} 件</td>
+                <td class="px-6 py-3 text-center text-gray-500">{{ ps.avg_pii_high ~ ' 件' if ps.avg_pii_high is not none else '—' }}</td>
+                <td class="px-6 py-3 text-center">
+                  {% if ps.avg_pii_high is not none %}
+                    {% if my_pii > ps.avg_pii_high %}<span class="text-orange-600 font-medium">↑ 高於平均</span>
+                    {% elif my_pii < ps.avg_pii_high %}<span class="text-green-600 font-medium">↓ 低於平均</span>
+                    {% else %}<span class="text-gray-500">≈ 接近平均</span>{% endif %}
+                  {% else %}—{% endif %}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {% endif %}
+
   <!-- Footer -->
   <div class="text-center text-xs text-gray-400 mt-8 no-print">
     <p>本報告由自動審查系統產生，僅供初步篩查參考，最終審查結論仍需人工確認。</p>
