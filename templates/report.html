@@ -279,7 +279,7 @@
       {# ── Peer comparison panel ── #}
       {% if report.peer_stats %}
       {% set ps = report.peer_stats %}
-      {% set st = report.review_table.submission_type if report.review_table else '—' %}
+      {% set st = (report.review_table.submission_type if (report.review_table and report.review_table.submission_type) else ps.submission_type) or '—' %}
       <section class="mt-8 bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
           <h2 class="text-base font-semibold text-gray-800">📊 同類案件比對（{{ st }}，共 {{ ps.count }} 件）</h2>
