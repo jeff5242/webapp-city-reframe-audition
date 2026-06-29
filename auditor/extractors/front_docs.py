@@ -37,9 +37,18 @@ _POA_PURPOSES = [
 _DATE_SOURCE_PRIORITY = ["申請書", "切結書", "委託書"]
 
 
+# Secondary markers required to distinguish a real 委託書 content page from a
+# TOC entry like "委託書.......3".  At least one must appear in the page text.
+_POA_CONTENT_MARKERS = ["委託人", "受託", "茲委託", "委託事項"]
+
+
 def _match_doc_type(text: str) -> Optional[str]:
     for doc_type, patterns in _DOC_PATTERNS.items():
         if any(p in text for p in patterns):
+            if doc_type == "委託書" and not any(m in text for m in _POA_CONTENT_MARKERS):
+                # Keyword matched but none of the content markers are present —
+                # this is most likely a TOC reference, not a real 委託書 page.
+                continue
             return doc_type
     return None
 
@@ -253,7 +262,18 @@ def extract_front_docs(
                 y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
                 if 100 <= y <= 130 and 1 <= mo <= 12 and 1 <= d <= 31:
                     report_date = f"{y}年{mo}月{d}日"
-                    report_date_source = "文號日期"
+                    # Extract the full reference number to include in the source label
+                    # _DOC_REF_DATE_RE captures groups (year, month, day) inside the
+                    # number; the full number is everything between 字第 and 號.
+                    full_num_match = re.search(r'字第(\d+)\s*號', m.group(0))
+                    ref_num = full_num_match.group(1) if full_num_match else ""
+                    org_match = re.search(r'(\S{2,8}更新會)字第', txt[max(0, m.start() - 15):m.end()])
+                    org = org_match.group(1) if org_match else ""
+                    if ref_num:
+                        ref_label = f"{org}字第{ref_num}號" if org else f"字第{ref_num}號"
+                        report_date_source = f"申請書文號（{ref_label}）"
+                    else:
+                        report_date_source = "文號日期"
                     break
 
     poa_docs = [d for d in docs if d.doc_type == "委託書"]
