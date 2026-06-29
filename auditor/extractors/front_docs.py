@@ -81,9 +81,11 @@ _COMPACT_DATE_RE = re.compile(r'(\d{3})年(\d{1,2})月(\d{1,2})日')
 # Dot-separated date common in timeline tables (e.g. "113.04.30")
 _DOT_DATE_RE = re.compile(r'(\d{3})\.(\d{2})\.(\d{2})')
 
-# Government document reference numbers encode the filing date:
-# e.g. "字第11304300035號" → year=113, month=04, day=30
-_DOC_REF_DATE_RE = re.compile(r'字第(\d{3})(\d{2})(\d{2})\d+\s*號')
+# Page watermark encodes the filing date next to "報核版":
+# e.g. "報核版 (東湖一更新會字第11304300035 號)" → year=113, month=04, day=30
+# Require "報核" to be on the same line to avoid matching other doc numbers
+# cited in the body text (e.g. 公聽會 ref numbers in 審議資料表).
+_DOC_REF_DATE_RE = re.compile(r'報核[^\n]*字第(\d{3})(\d{2})(\d{2})\d+\s*號')
 
 # Keywords that indicate the date is the filing/report date
 _FILED_DATE_KEYWORDS = ["謄本", "報核", "送件", "申請日", "報核日"]
