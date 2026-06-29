@@ -43,29 +43,65 @@ def _search(pattern: str, text: str, group: int = 1) -> Optional[str]:
     return m.group(group).strip() if m else None
 
 
-def _find_review_table_page(pdf_path: str) -> Optional[int]:
-    """Find the page containing the actual 審議資料表 form (not the TOC entry)."""
+def _find_review_table_page(pdf_path: str) -> tuple[Optional[int], str]:
+    """Find the 審議資料表 page and return (page_num, text).
+
+    First pass: pdfplumber (fast, works for text-based PDFs).
+    Second pass: EasyOCR on image pages (fallback for scanned PDFs).
+    Returns (None, "") if not found.
+    """
+    import unicodedata
+
     meta = get_pdf_metadata(pdf_path)
     total = meta["total_pages"]
-    pages = extract_pages_text(pdf_path, 1, min(30, total))
+    scan_limit = min(30, total)
+    pages = extract_pages_text(pdf_path, 1, scan_limit)
 
+    # First pass — pdfplumber / pymupdf text
+    image_page_indices: list[int] = []
     for page in pages:
         text = page["text"]
         has_keyword = any(kw in text for kw in _TABLE_KEYWORDS)
         matched_markers = [m for m in _FORM_CONTENT_MARKERS if m in text]
-        # Require 2+ form markers to avoid matching the TOC entry
         if has_keyword and len(matched_markers) >= 2:
-            return page["page_num"]
-    return None
+            return page["page_num"], text
+        if page.get("_image_page"):
+            image_page_indices.append(page["page_num"] - 1)
+
+    if not image_page_indices:
+        return None, ""
+
+    # Second pass — OCR on scanned pages
+    try:
+        from ..parsers.ocr_reader import ocr_available, ocr_pages
+        if not ocr_available():
+            return None, ""
+    except ImportError:
+        return None, ""
+
+    ocr_results = ocr_pages(pdf_path, image_page_indices)
+    for idx, raw in ocr_results.items():
+        text = unicodedata.normalize("NFKC", raw)
+        has_keyword = any(kw in text for kw in _TABLE_KEYWORDS)
+        # Relax to 1 marker for OCR (character recognition can miss some)
+        matched_markers = [m for m in _FORM_CONTENT_MARKERS if m in text]
+        if has_keyword and len(matched_markers) >= 1:
+            return idx + 1, text  # 1-based page num
+
+    return None, ""
 
 
 def extract_review_table(pdf_path: str) -> Optional[ReviewTableData]:
     """Find and extract 審議資料表 from a PDF. Returns None if not found."""
-    page_num = _find_review_table_page(pdf_path)
+    page_num, text = _find_review_table_page(pdf_path)
     if page_num is None:
         return None
 
-    text = extract_page_text(pdf_path, page_num)
+    # For text-based pages, text from _find_review_table_page already has content.
+    # Re-extract only when the returned text is empty (shouldn't happen in practice).
+    if not text.strip():
+        text = extract_page_text(pdf_path, page_num)
+
     return _parse_from_text(text, page_num)
 
 
