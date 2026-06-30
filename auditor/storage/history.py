@@ -140,6 +140,15 @@ def get_prev_run(case_name: str) -> Optional[dict]:
     return dict(row) if row else None
 
 
+def delete_test_runs() -> int:
+    """Delete runs whose case_name contains test markers (e2e_test, api_test, etc.)."""
+    with _conn() as c:
+        cur = c.execute(
+            "DELETE FROM runs WHERE case_name LIKE '%e2e_test%' OR case_name LIKE '%api_test%'"
+        )
+        return cur.rowcount
+
+
 def get_run_history(case_name: str, limit: int = 10) -> List[dict]:
     with _conn() as c:
         rows = c.execute(
