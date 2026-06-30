@@ -205,15 +205,34 @@ def _preprocess_for_ocr(img_array: "np.ndarray") -> "np.ndarray":  # type: ignor
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         enhanced = clahe.apply(gray)
         denoised = cv2.fastNlMeansDenoising(enhanced, h=10, templateWindowSize=7, searchWindowSize=21)
-        binary = cv2.adaptiveThreshold(
-            denoised, 255,
+        binary = _binarize(denoised)
+        return cv2.cvtColor(binary, cv2.COLOR_GRAY2RGB)
+    except Exception:
+        return img_array
+
+
+def _binarize(gray: "np.ndarray") -> "np.ndarray":  # type: ignore[name-defined]
+    """Binarize a grayscale image using Sauvola thresholding.
+
+    Sauvola accounts for local statistics (mean + std dev) which handles
+    uneven illumination better than global or simple adaptive thresholding.
+    Falls back to OpenCV adaptive Gaussian threshold if scikit-image is
+    not installed.
+    """
+    try:
+        import numpy as np
+        from skimage.filters import threshold_sauvola
+
+        thresh = threshold_sauvola(gray, window_size=25)
+        return (gray >= thresh).astype(np.uint8) * 255
+    except Exception:
+        import cv2
+        return cv2.adaptiveThreshold(
+            gray, 255,
             cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
             cv2.THRESH_BINARY,
             blockSize=31, C=10,
         )
-        return cv2.cvtColor(binary, cv2.COLOR_GRAY2RGB)
-    except Exception:
-        return img_array
 
 
 def _parse_paddle_result(result: object) -> str:
