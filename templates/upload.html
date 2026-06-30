@@ -509,16 +509,31 @@
     document.getElementById('auditOverlay').classList.add('hidden');
   }
 
+  async function pollAuditTask(taskId, overlayTitle) {
+    showOverlay(overlayTitle || '審查中，請稍候…', '排隊中…');
+    for (let i = 0; i < 300; i++) {  // max ~25 min at 5s interval
+      await new Promise(r => setTimeout(r, 5000));
+      try {
+        const s = await fetch(`/audit/${taskId}/status`).then(r => r.json());
+        document.getElementById('overlaySubtitle').textContent = s.progress || '處理中…';
+        if (s.status === 'done') { window.location.href = `/audit/${taskId}/report`; return; }
+        if (s.status === 'error') { hideOverlay(); alert('審查失敗：' + s.progress); return; }
+      } catch (_) { /* network blip, keep polling */ }
+    }
+    hideOverlay();
+    alert('審查超時，請重試');
+  }
+
   async function reaudit(bpKey, reKey) {
     closeManage();
-    showOverlay('正在複驗中…', '伺服器正在重新讀取 PDF 並執行 OCR，請稍候');
     try {
       const form = new FormData();
       form.append('business_plan_key', bpKey);
       if (reKey) form.append('rights_exchange_key', reKey);
       const resp = await fetch('/audit', { method: 'POST', body: form });
-      if (!resp.ok) { hideOverlay(); throw new Error(await resp.text() || '審查失敗'); }
-      document.open(); document.write(await resp.text()); document.close();
+      if (!resp.ok) throw new Error(await resp.text() || '提交失敗');
+      const { task_id } = await resp.json();
+      await pollAuditTask(task_id, '正在複驗中…');
     } catch (err) {
       hideOverlay();
       alert('錯誤：' + err.message);
@@ -555,18 +570,17 @@
           reKey = await uploadToS3(reFile, 'progressReBar', 'progressRePct');
         }
 
-        showOverlay('審查中，請稍候…', '伺服器正在解析 PDF 並執行規則檢查');
         const form = new FormData();
         form.append('business_plan_key', bpKey);
         if (reKey) form.append('rights_exchange_key', reKey);
 
         const resp = await fetch('/audit', { method: 'POST', body: form });
         if (!resp.ok) {
-          hideOverlay();
           const err = await resp.text();
           throw new Error(err || '審查失敗');
         }
-        document.open(); document.write(await resp.text()); document.close();
+        const { task_id } = await resp.json();
+        await pollAuditTask(task_id, '審查中，請稍候…');
 
       } else {
         // ── Fallback: classic multipart form submit ──
