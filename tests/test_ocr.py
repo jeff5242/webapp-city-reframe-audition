@@ -58,7 +58,10 @@ def test_match_doc_type_jiangjie_shu():
 
 def test_match_doc_type_weituoshu():
     from auditor.extractors.front_docs import _match_doc_type
-    assert _match_doc_type("委  託  書") == "委託書"
+    # Real 委託書 page: spaced OCR title + content marker → matches
+    assert _match_doc_type("委  託  書\n茲委託都更顧問公司辦理申請事宜") == "委託書"
+    # Bare title only → treated as TOC reference, not a real page
+    assert _match_doc_type("委  託  書") is None
 
 
 # ── OCR-permissive date extraction ────────────────────────────────────────────
