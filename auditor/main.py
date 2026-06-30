@@ -45,6 +45,29 @@ from .version_selector import select_version
 
 _DOCS_DIR = Path(__file__).parent.parent / "docs"
 
+def _read_app_version() -> str:
+    """Read git commit hash from VERSION file (written at deploy time)."""
+    try:
+        ver_file = Path(__file__).parent.parent / "VERSION"
+        if ver_file.exists():
+            return ver_file.read_text().strip()[:7]
+    except Exception:
+        pass
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=2,
+            cwd=str(Path(__file__).parent.parent),
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return "unknown"
+
+APP_VERSION = _read_app_version()
+
 
 def _date_from_filename(filename: str) -> str | None:
     """Extract ROC date from filenames like '1131114【案名】' (YYYMMDD = 113年11月14日)."""
@@ -158,6 +181,7 @@ app = FastAPI(
 _TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 _STATIC_DIR = Path(__file__).parent.parent / "static"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+templates.env.globals["APP_VERSION"] = APP_VERSION
 
 if _STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
