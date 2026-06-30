@@ -1,24 +1,24 @@
 """
-OCR reader for image-based PDF pages using EasyOCR + pymupdf rendering.
+OCR reader for image-based PDF pages using PaddleOCR + pymupdf rendering.
 
 Called as a third-pass fallback when both pdfplumber and pymupdf return empty
 text, which happens with scanned/image-only PDF pages.
 
-EasyOCR model (~200 MB) is downloaded on first call and cached to
-~/.EasyOCR/model/ inside the container.  Subsequent calls reuse the loaded
-model — the Reader is kept as a module-level singleton.
+PaddleOCR model (~200–400 MB) is downloaded on first call and cached to
+~/.paddleocr/ inside the container.  Subsequent calls reuse the loaded
+model — the Reader is kept as a module-level singleton behind a threading.Lock.
 
-OCR results are also cached in a SQLite database at
+OCR results are cached in a SQLite database at
 ~/.cache/urban-renewal-ocr/ocr_cache.db, keyed by (sha256 of first 64KB,
-page_index, zoom).  A cache hit skips EasyOCR entirely.
+page_index, zoom, preprocess_version).  A cache hit skips PaddleOCR entirely.
 
 Speed: ocr_pages() uses a producer-consumer pipeline — a background thread
-renders PDF pages to numpy arrays while the main thread runs OCR on the
-previous page, overlapping I/O with inference.
+renders all PDF pages to numpy arrays while the main thread collects them;
+once all images are ready a single batch OCR call processes them all.
 
 Quality: _preprocess_for_ocr() applies CLAHE contrast enhancement + fast
-denoising + adaptive binarization before passing to EasyOCR, which
-significantly reduces garbled-character errors on scanned government documents.
+denoising + adaptive binarization before passing to PaddleOCR.  Only
+detections with confidence >= _OCR_MIN_CONFIDENCE are included in the output.
 """
 from __future__ import annotations
 
@@ -42,8 +42,11 @@ _CACHE_DB = _CACHE_DIR / "ocr_cache.db"
 _HASH_BYTES = 64 * 1024  # first 64 KB for fast, stable identification
 
 # Bump this constant whenever the preprocessing pipeline changes so old cache
-# entries are never served for a different algorithm.
+# entries are never returned for a different algorithm.
 _PREPROCESS_VERSION = 2
+
+# Confidence threshold — PaddleOCR detections below this score are dropped.
+_OCR_MIN_CONFIDENCE = 0.5
 
 _CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS ocr_cache (
@@ -116,26 +119,28 @@ def _cache_put(conn: sqlite3.Connection, fhash: str, page_idx: int, zoom: float,
         )
         conn.commit()
 
+
 try:
     import fitz as _fitz  # pymupdf — renders page to image
     _FITZ_OK = True
 except ImportError:
     _FITZ_OK = False
 
-_easyocr_reader = None  # lazy singleton
+_paddle_reader = None  # lazy singleton
 _OCR_AVAILABLE: Optional[bool] = None  # None = not yet probed
+_INIT_LOCK = threading.Lock()   # guards singleton initialisation
+_INFER_LOCK = threading.Lock()  # PaddleOCR inference is not thread-safe
 
 
 def _preprocess_for_ocr(img_array: "np.ndarray") -> "np.ndarray":  # type: ignore[name-defined]
     """Enhance image quality before OCR: CLAHE → denoise → adaptive binarize.
 
     Fixes common scanned-document issues: uneven lighting, scanner noise,
-    and low contrast that cause EasyOCR to produce garbled Traditional Chinese.
+    and low contrast that cause PaddleOCR to produce garbled Traditional Chinese.
     Falls back to original array if OpenCV is unavailable.
     """
     try:
         import cv2
-        import numpy as np
 
         if img_array.ndim == 3 and img_array.shape[2] == 4:
             gray = cv2.cvtColor(img_array, cv2.COLOR_RGBA2GRAY)
@@ -158,38 +163,66 @@ def _preprocess_for_ocr(img_array: "np.ndarray") -> "np.ndarray":  # type: ignor
         return img_array
 
 
+def _parse_paddle_result(result: object) -> str:
+    """Extract text from a PaddleOCR result for a single image.
+
+    Filters detections whose confidence is below ``_OCR_MIN_CONFIDENCE``.
+
+    PaddleOCR result format per image:
+        [[box, (text, confidence)], ...]
+    where box = [[x1,y1],[x2,y2],[x3,y3],[x4,y4]].
+    """
+    if not result:
+        return ""
+    lines = []
+    for detection in result:
+        if detection is None:
+            continue
+        try:
+            text, confidence = detection[1]
+            if confidence >= _OCR_MIN_CONFIDENCE:
+                lines.append(str(text))
+        except (IndexError, TypeError, ValueError):
+            continue
+    return "\n".join(lines)
+
+
 def _get_reader():
-    """Return module-level EasyOCR Reader, initializing on first call."""
-    global _easyocr_reader, _OCR_AVAILABLE
+    """Return module-level PaddleOCR Reader, initializing on first call."""
+    global _paddle_reader, _OCR_AVAILABLE
     if _OCR_AVAILABLE is False:
         return None
-    if _easyocr_reader is not None:
-        return _easyocr_reader
-    try:
-        import easyocr
-        _easyocr_reader = easyocr.Reader(
-            ["ch_tra", "en"],
-            gpu=False,
-            verbose=False,
-        )
-        _OCR_AVAILABLE = True
-        logger.info("EasyOCR reader initialized (ch_tra + en)")
-        return _easyocr_reader
-    except Exception as exc:
-        _OCR_AVAILABLE = False
-        logger.warning("EasyOCR not available: %s", exc)
-        return None
+    if _paddle_reader is not None:
+        return _paddle_reader
+    with _INIT_LOCK:
+        if _paddle_reader is not None:  # double-checked locking
+            return _paddle_reader
+        try:
+            from paddleocr import PaddleOCR
+            _paddle_reader = PaddleOCR(
+                use_angle_cls=True,
+                lang="chinese_cht",
+                use_gpu=False,
+                show_log=False,
+            )
+            _OCR_AVAILABLE = True
+            logger.info("PaddleOCR reader initialized (chinese_cht)")
+            return _paddle_reader
+        except Exception as exc:
+            _OCR_AVAILABLE = False
+            logger.warning("PaddleOCR not available: %s", exc)
+            return None
 
 
 def ocr_available() -> bool:
-    """Return True if EasyOCR and pymupdf are both importable."""
+    """Return True if PaddleOCR and pymupdf are both importable."""
     return _FITZ_OK and (_OCR_AVAILABLE is not False)
 
 
 def ocr_page(pdf_path: str, page_index: int, zoom: float = 2.0) -> str:
     """Run OCR on a single PDF page and return extracted text.
 
-    Checks the SQLite cache first; on a miss, runs EasyOCR and stores the
+    Checks the SQLite cache first; on a miss, runs PaddleOCR and stores the
     result.  Cache failures are silently ignored so OCR always proceeds.
 
     Args:
@@ -210,7 +243,6 @@ def ocr_page(pdf_path: str, page_index: int, zoom: float = 2.0) -> str:
     fhash = _file_hash(pdf_path)
     conn = _get_cache_conn() if fhash else None
 
-    # Cache lookup
     if conn and fhash:
         cached = _cache_get(conn, fhash, page_index, zoom)
         if cached is not None:
@@ -231,8 +263,10 @@ def ocr_page(pdf_path: str, page_index: int, zoom: float = 2.0) -> str:
         img = Image.open(io.BytesIO(pix.tobytes("png")))
         img_array = _preprocess_for_ocr(np.array(img))
 
-        results = reader.readtext(img_array, detail=0)
-        text = "\n".join(str(r) for r in results)
+        with _INFER_LOCK:
+            result = reader.ocr(img_array, cls=True)
+
+        text = _parse_paddle_result(result[0] if result else None)
 
         if conn and fhash:
             _cache_put(conn, fhash, page_index, zoom, text)
@@ -247,8 +281,12 @@ def ocr_page(pdf_path: str, page_index: int, zoom: float = 2.0) -> str:
 def ocr_pages(pdf_path: str, page_indices: list[int], zoom: float = 2.0) -> dict[int, str]:
     """OCR multiple pages at once, reusing the same reader.
 
-    Checks the SQLite cache for each page individually; only runs EasyOCR for
+    Checks the SQLite cache for each page individually; only runs PaddleOCR for
     pages not already cached.  Cache failures are silently ignored.
+
+    Uses a producer-consumer pipeline: a background thread renders all PDF pages
+    to numpy arrays; once rendering completes, all images are processed in a
+    single batch OCR call to minimise model overhead.
 
     Returns a dict mapping 0-based page index → extracted text.
     """
@@ -264,7 +302,6 @@ def ocr_pages(pdf_path: str, page_indices: list[int], zoom: float = 2.0) -> dict
     results: dict[int, str] = {}
     uncached_indices: list[int] = []
 
-    # Populate from cache where possible
     if conn and fhash:
         for idx in page_indices:
             cached = _cache_get(conn, fhash, idx, zoom)
@@ -282,9 +319,9 @@ def ocr_pages(pdf_path: str, page_indices: list[int], zoom: float = 2.0) -> dict
         import numpy as np
         from PIL import Image
 
-        # Producer-consumer: background thread renders pages while main thread
-        # runs OCR, overlapping PDF I/O with inference for ~20-30% speedup.
-        render_q: queue.Queue = queue.Queue(maxsize=3)
+        # Producer: render pages in a background thread; bounded queue limits
+        # peak memory while rendering and preprocessing overlap.
+        render_q: queue.Queue = queue.Queue(maxsize=4)
 
         def _render_worker() -> None:
             doc = _fitz.open(pdf_path)
@@ -305,23 +342,34 @@ def ocr_pages(pdf_path: str, page_indices: list[int], zoom: float = 2.0) -> dict
         renderer = threading.Thread(target=_render_worker, daemon=True)
         renderer.start()
 
+        # Collect rendered images while renderer works
+        rendered: list[tuple[int, "np.ndarray"]] = []
         while True:
             item = render_q.get()
             if item is None:
                 break
             idx, img_array = item
-            if img_array is None:
-                continue
-            preprocessed = _preprocess_for_ocr(img_array)
-            hits = reader.readtext(preprocessed, detail=0)
-            text = "\n".join(str(r) for r in hits)
+            if img_array is not None:
+                rendered.append((idx, _preprocess_for_ocr(img_array)))
+        renderer.join()
+
+        if not rendered:
+            return results
+
+        # Batch OCR: single call for all accumulated images
+        images = [r[1] for r in rendered]
+        with _INFER_LOCK:
+            batch_result = reader.ocr(images, cls=True)
+
+        for i, (idx, _) in enumerate(rendered):
+            page_result = batch_result[i] if batch_result and i < len(batch_result) else None
+            text = _parse_paddle_result(page_result)
             results[idx] = text
             if conn and fhash:
                 _cache_put(conn, fhash, idx, zoom, text)
 
-        renderer.join()
         return results
 
     except Exception as exc:
         logger.warning("OCR batch failed: %s", exc)
-        return results  # return whatever was already retrieved from cache
+        return results
