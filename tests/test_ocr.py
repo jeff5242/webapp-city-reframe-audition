@@ -153,6 +153,123 @@ def test_extract_front_docs_no_ocr_flag_skips_ocr():
         mock_ocr.assert_not_called()
 
 
+# ── PaddleOCR integration (Item 1) ───────────────────────────────────────────
+
+def test_parse_paddle_result_empty_on_none():
+    from auditor.parsers.ocr_reader import _parse_paddle_result
+    assert _parse_paddle_result(None) == ""
+    assert _parse_paddle_result([]) == ""
+
+
+def test_parse_paddle_result_filters_low_confidence():
+    """Detections below _OCR_MIN_CONFIDENCE must be excluded."""
+    from auditor.parsers.ocr_reader import _parse_paddle_result, _OCR_MIN_CONFIDENCE
+    detections = [
+        [None, ("高信心", 0.95)],
+        [None, ("低信心", _OCR_MIN_CONFIDENCE - 0.1)],
+        [None, ("邊界值", _OCR_MIN_CONFIDENCE)],
+    ]
+    text = _parse_paddle_result(detections)
+    assert "高信心" in text
+    assert "邊界值" in text
+    assert "低信心" not in text
+
+
+def test_parse_paddle_result_joins_lines():
+    from auditor.parsers.ocr_reader import _parse_paddle_result
+    detections = [
+        [None, ("line one", 0.9)],
+        [None, ("line two", 0.8)],
+    ]
+    assert _parse_paddle_result(detections) == "line one\nline two"
+
+
+def test_ocr_page_uses_paddle_reader(tmp_path):
+    """ocr_page must call reader.ocr() and return parsed text."""
+    import auditor.parsers.ocr_reader as mod
+    from unittest.mock import MagicMock, patch
+
+    fake_reader = MagicMock()
+    fake_reader.ocr.return_value = [[[None, ("測試文字", 0.95)]]]
+
+    fake_doc = MagicMock()
+    fake_pix = MagicMock()
+    fake_pix.tobytes.return_value = _make_png_bytes()
+    fake_doc.__len__ = lambda self: 5
+    fake_doc.__getitem__ = lambda self, i: MagicMock(
+        get_pixmap=lambda **kw: fake_pix
+    )
+    fake_doc.__enter__ = lambda self: self
+    fake_doc.__exit__ = MagicMock(return_value=False)
+
+    with patch.object(mod, "_FITZ_OK", True), \
+         patch.object(mod, "_paddle_reader", fake_reader), \
+         patch.object(mod, "_OCR_AVAILABLE", True), \
+         patch.object(mod._fitz, "open", return_value=fake_doc):
+        result = mod.ocr_page("fake.pdf", 0)
+
+    assert "測試文字" in result
+    fake_reader.ocr.assert_called_once()
+
+
+def test_ocr_pages_batch_call_count(tmp_path):
+    """ocr_pages must make exactly one batch reader.ocr() call for multiple uncached pages."""
+    import auditor.parsers.ocr_reader as mod
+    from unittest.mock import MagicMock, patch
+
+    fake_reader = MagicMock()
+    # Batch result: two pages
+    fake_reader.ocr.return_value = [
+        [[None, ("頁一", 0.9)]],
+        [[None, ("頁二", 0.8)]],
+    ]
+
+    fake_pix = MagicMock()
+    fake_pix.tobytes.return_value = _make_png_bytes()
+    fake_page = MagicMock()
+    fake_page.get_pixmap.return_value = fake_pix
+
+    fake_doc = MagicMock()
+    fake_doc.__len__ = lambda self: 10
+    fake_doc.__getitem__ = lambda self, i: fake_page
+    fake_doc.close = MagicMock()
+
+    with patch.object(mod, "_FITZ_OK", True), \
+         patch.object(mod, "_paddle_reader", fake_reader), \
+         patch.object(mod, "_OCR_AVAILABLE", True), \
+         patch.object(mod, "_file_hash", return_value=None), \
+         patch.object(mod._fitz, "open", return_value=fake_doc):
+        result = mod.ocr_pages("fake.pdf", [0, 1])
+
+    assert fake_reader.ocr.call_count == 1, "Batch must use exactly one reader.ocr() call"
+    assert "頁一" in result.get(0, "")
+    assert "頁二" in result.get(1, "")
+
+
+def _make_png_bytes() -> bytes:
+    """Return minimal valid PNG bytes (1x1 white pixel) for mocking."""
+    from PIL import Image
+    import io
+    img = Image.new("RGB", (1, 1), color=(255, 255, 255))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+# ── confidence filtering (Item 2) ─────────────────────────────────────────────
+
+def test_ocr_min_confidence_constant_exists():
+    from auditor.parsers.ocr_reader import _OCR_MIN_CONFIDENCE
+    assert 0.0 < _OCR_MIN_CONFIDENCE < 1.0
+
+
+def test_parse_paddle_result_skips_none_detection():
+    """None entries in the detection list must be skipped gracefully."""
+    from auditor.parsers.ocr_reader import _parse_paddle_result
+    detections = [None, [None, ("valid", 0.9)], None]
+    assert _parse_paddle_result(detections) == "valid"
+
+
 # ── cache version key (Item 7) ────────────────────────────────────────────────
 
 def test_cache_schema_includes_preprocess_version(tmp_path):
