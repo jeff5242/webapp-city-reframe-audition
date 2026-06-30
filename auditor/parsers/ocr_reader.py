@@ -41,13 +41,18 @@ _CACHE_DIR = Path.home() / ".cache" / "urban-renewal-ocr"
 _CACHE_DB = _CACHE_DIR / "ocr_cache.db"
 _HASH_BYTES = 64 * 1024  # first 64 KB for fast, stable identification
 
+# Bump this constant whenever the preprocessing pipeline changes so old cache
+# entries are never served for a different algorithm.
+_PREPROCESS_VERSION = 2
+
 _CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS ocr_cache (
-    file_hash TEXT NOT NULL,
-    page_idx  INTEGER NOT NULL,
-    zoom      REAL NOT NULL,
-    text      TEXT NOT NULL,
-    PRIMARY KEY (file_hash, page_idx, zoom)
+    file_hash          TEXT    NOT NULL,
+    page_idx           INTEGER NOT NULL,
+    zoom               REAL    NOT NULL,
+    preprocess_version INTEGER NOT NULL,
+    text               TEXT    NOT NULL,
+    PRIMARY KEY (file_hash, page_idx, zoom, preprocess_version)
 )
 """
 
@@ -55,11 +60,24 @@ CREATE TABLE IF NOT EXISTS ocr_cache (
 def _get_cache_conn() -> Optional[sqlite3.Connection]:
     """Return a SQLite connection, creating the DB and table if needed.
 
+    Migrates the schema automatically: if the existing table is missing the
+    ``preprocess_version`` column (old schema), it is dropped so the new
+    schema can be created.  Cache data is a pure performance optimisation, so
+    dropping old rows on schema change is acceptable.
+
     Returns None if anything goes wrong so callers can skip caching silently.
     """
     try:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(_CACHE_DB), check_same_thread=False)
+        existing_cols = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(ocr_cache)")
+        }
+        if existing_cols and "preprocess_version" not in existing_cols:
+            conn.execute("DROP TABLE ocr_cache")
+            conn.commit()
+            logger.debug("OCR cache schema migrated (dropped old table)")
         conn.execute(_CREATE_TABLE_SQL)
         conn.commit()
         return conn
@@ -80,8 +98,9 @@ def _cache_get(conn: sqlite3.Connection, fhash: str, page_idx: int, zoom: float)
     """Return cached OCR text, or None if not found."""
     with contextlib.suppress(Exception):
         row = conn.execute(
-            "SELECT text FROM ocr_cache WHERE file_hash=? AND page_idx=? AND zoom=?",
-            (fhash, page_idx, zoom),
+            "SELECT text FROM ocr_cache"
+            " WHERE file_hash=? AND page_idx=? AND zoom=? AND preprocess_version=?",
+            (fhash, page_idx, zoom, _PREPROCESS_VERSION),
         ).fetchone()
         return row[0] if row else None
     return None
@@ -91,8 +110,9 @@ def _cache_put(conn: sqlite3.Connection, fhash: str, page_idx: int, zoom: float,
     """Write an OCR result to the cache (ignore failures)."""
     with contextlib.suppress(Exception):
         conn.execute(
-            "INSERT OR REPLACE INTO ocr_cache (file_hash, page_idx, zoom, text) VALUES (?,?,?,?)",
-            (fhash, page_idx, zoom, text),
+            "INSERT OR REPLACE INTO ocr_cache"
+            " (file_hash, page_idx, zoom, preprocess_version, text) VALUES (?,?,?,?,?)",
+            (fhash, page_idx, zoom, _PREPROCESS_VERSION, text),
         )
         conn.commit()
 

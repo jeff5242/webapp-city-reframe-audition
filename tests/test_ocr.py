@@ -151,3 +151,93 @@ def test_extract_front_docs_no_ocr_flag_skips_ocr():
          patch("auditor.parsers.ocr_reader.ocr_pages") as mock_ocr:
         extract_front_docs("fake.pdf", use_ocr=False)
         mock_ocr.assert_not_called()
+
+
+# ── cache version key (Item 7) ────────────────────────────────────────────────
+
+def test_cache_schema_includes_preprocess_version(tmp_path):
+    """The SQLite cache table must have a preprocess_version column."""
+    import sqlite3
+    import auditor.parsers.ocr_reader as mod
+    from unittest.mock import patch
+
+    db_path = tmp_path / "ocr_cache.db"
+    with patch.object(mod, "_CACHE_DB", db_path), \
+         patch.object(mod, "_CACHE_DIR", tmp_path):
+        conn = mod._get_cache_conn()
+        assert conn is not None
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(ocr_cache)")}
+        assert "preprocess_version" in cols
+        conn.close()
+
+
+def test_cache_get_uses_preprocess_version(tmp_path):
+    """_cache_get must not return entries from a different preprocess_version."""
+    import sqlite3
+    import auditor.parsers.ocr_reader as mod
+    from unittest.mock import patch
+
+    db_path = tmp_path / "ocr_cache.db"
+    with patch.object(mod, "_CACHE_DB", db_path), \
+         patch.object(mod, "_CACHE_DIR", tmp_path):
+        conn = mod._get_cache_conn()
+        # Write with version 1 directly
+        conn.execute(
+            "INSERT INTO ocr_cache (file_hash, page_idx, zoom, preprocess_version, text)"
+            " VALUES (?,?,?,?,?)",
+            ("abc", 0, 2.0, 1, "old-text"),
+        )
+        conn.commit()
+        # _cache_get with current _PREPROCESS_VERSION must not return old entry
+        result = mod._cache_get(conn, "abc", 0, 2.0)
+        assert result is None
+        conn.close()
+
+
+def test_cache_put_uses_preprocess_version(tmp_path):
+    """_cache_put must store the current _PREPROCESS_VERSION."""
+    import auditor.parsers.ocr_reader as mod
+    from unittest.mock import patch
+
+    db_path = tmp_path / "ocr_cache.db"
+    with patch.object(mod, "_CACHE_DB", db_path), \
+         patch.object(mod, "_CACHE_DIR", tmp_path):
+        conn = mod._get_cache_conn()
+        mod._cache_put(conn, "abc", 0, 2.0, "hello")
+        row = conn.execute(
+            "SELECT preprocess_version FROM ocr_cache WHERE file_hash=? AND page_idx=? AND zoom=?",
+            ("abc", 0, 2.0),
+        ).fetchone()
+        assert row is not None
+        assert row[0] == mod._PREPROCESS_VERSION
+        conn.close()
+
+
+def test_cache_migration_drops_old_schema(tmp_path):
+    """If the existing table is missing preprocess_version, it must be recreated."""
+    import sqlite3
+    import auditor.parsers.ocr_reader as mod
+    from unittest.mock import patch
+
+    db_path = tmp_path / "ocr_cache.db"
+    # Create old-schema table
+    old_conn = sqlite3.connect(str(db_path))
+    old_conn.execute(
+        "CREATE TABLE ocr_cache"
+        " (file_hash TEXT, page_idx INTEGER, zoom REAL, text TEXT,"
+        "  PRIMARY KEY (file_hash, page_idx, zoom))"
+    )
+    old_conn.execute("INSERT INTO ocr_cache VALUES ('x', 0, 2.0, 'old')")
+    old_conn.commit()
+    old_conn.close()
+
+    with patch.object(mod, "_CACHE_DB", db_path), \
+         patch.object(mod, "_CACHE_DIR", tmp_path):
+        conn = mod._get_cache_conn()
+        assert conn is not None
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(ocr_cache)")}
+        assert "preprocess_version" in cols
+        # Old data should be gone
+        count = conn.execute("SELECT COUNT(*) FROM ocr_cache").fetchone()[0]
+        assert count == 0
+        conn.close()
