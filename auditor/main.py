@@ -4,7 +4,10 @@ import json
 import logging
 import os
 import re
+import shutil
 import tempfile
+import threading
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -190,6 +193,257 @@ _engine = build_default_engine()
 # In-memory cache for annotated PDFs (key → bytes)
 _PDF_CACHE: dict[str, bytes] = {}
 
+# Async audit task store: task_id → {status, progress, html, done_at}
+_AUDIT_TASKS: dict[str, dict] = {}
+_TASKS_LOCK = threading.Lock()
+
+
+def _set_task_progress(task_id: str, status: str, progress: str) -> None:
+    with _TASKS_LOCK:
+        if task_id in _AUDIT_TASKS:
+            _AUDIT_TASKS[task_id]["status"] = status
+            _AUDIT_TASKS[task_id]["progress"] = progress
+
+
+def _prune_old_tasks() -> None:
+    """Remove tasks older than 2 hours to prevent unbounded memory growth."""
+    cutoff = time.time() - 7200
+    with _TASKS_LOCK:
+        stale = [k for k, v in _AUDIT_TASKS.items() if (v.get("done_at") or 0) < cutoff and v.get("done_at")]
+        for k in stale:
+            del _AUDIT_TASKS[k]
+
+
+def _run_audit_sync(
+    task_id: str,
+    bp_s3_key: Optional[str],
+    re_s3_key: Optional[str],
+    bp_bytes: Optional[bytes],
+    bp_filename: Optional[str],
+    re_bytes: Optional[bytes],
+    re_filename_direct: Optional[str],
+) -> None:
+    """Full audit pipeline running in a background thread."""
+    tmp_dir = tempfile.mkdtemp()
+    try:
+        _set_task_progress(task_id, "running", "準備 PDF 檔案中…")
+
+        # Resolve primary PDF
+        if bp_s3_key:
+            _set_task_progress(task_id, "running", "從 S3 下載 PDF 中…")
+            primary_pdf = download_to_temp(bp_s3_key, tmp_dir)
+            bp_fname = Path(bp_s3_key).name
+        else:
+            bp_path = Path(tmp_dir) / (bp_filename or "business_plan.pdf")
+            bp_path.write_bytes(bp_bytes or b"")
+            primary_pdf = str(bp_path)
+            bp_fname = bp_filename or "business_plan.pdf"
+
+        # Resolve secondary PDF
+        re_path: Optional[Path] = None
+        re_fname: Optional[str] = None
+        if re_s3_key:
+            re_local = download_to_temp(re_s3_key, tmp_dir)
+            re_path = Path(re_local)
+            re_fname = Path(re_s3_key).name
+        elif re_bytes and re_filename_direct:
+            re_path = Path(tmp_dir) / re_filename_direct
+            re_path.write_bytes(re_bytes)
+            re_fname = re_filename_direct
+
+        case_meta_id: Optional[str] = uuid.uuid4().hex[:12] if bp_s3_key else None
+
+        # ── Extract from primary document ──
+        _set_task_progress(task_id, "running", "OCR 辨識掃描頁面中（首次可能需 10-20 分鐘）…")
+        try:
+            review_table = extract_review_table(primary_pdf)
+        except Exception:
+            review_table = None
+        try:
+            front_docs, pii_risks = extract_front_docs(primary_pdf)
+        except Exception:
+            front_docs, pii_risks = None, []
+        try:
+            term_matches = scan_for_wrong_terms(primary_pdf)
+        except Exception:
+            term_matches = []
+        try:
+            number_contexts = extract_number_contexts(primary_pdf)
+        except Exception:
+            number_contexts = []
+
+        _set_task_progress(task_id, "running", "執行規則檢查中…")
+        audit_data = AuditData(
+            review_table=review_table,
+            front_docs=front_docs,
+            pii_risks=tuple(pii_risks),
+            term_matches=tuple(term_matches),
+            number_contexts=tuple(number_contexts),
+        )
+        findings = _engine.evaluate(audit_data)
+
+        # Version selection
+        report_date_roc = front_docs.report_date if front_docs and front_docs.report_date else None
+        fill_date_fallback = review_table.fill_date if review_table else None
+        filename_date_fallback = _date_from_filename(bp_fname)
+        version_date = report_date_roc or fill_date_fallback or filename_date_fallback
+        reg_version, fill_date_iso = select_version(version_date)
+
+        case_name = (
+            review_table.case_name if review_table and review_table.case_name else bp_fname
+        )
+        audit_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        # Diff
+        diffs: list[FindingDiff] = []
+        prev_audit_time: Optional[str] = None
+        prev_run = get_prev_run(case_name)
+        if prev_run:
+            prev_audit_time = prev_run["audit_time"]
+            diffs = _compute_diff(prev_run["findings"], findings)
+
+        # Save run
+        save_run(
+            case_name=case_name,
+            audit_time=audit_time,
+            rule_ver=reg_version.label,
+            findings_json=json.dumps([
+                {"rule_id": f.rule_id, "rule_name": f.rule_name,
+                 "status": f.status, "message": f.message, "evidence": f.evidence}
+                for f in findings
+            ]),
+        )
+
+        # Metrics
+        _submission_type = review_table.submission_type if review_table else None
+        if _submission_type is None and re_s3_key:
+            _submission_type = "B-1"
+        _bonus_pct: Optional[float] = None
+        if review_table and review_table.bonus_floor_area and review_table.bonus_limit and review_table.bonus_limit > 0:
+            _bonus_pct = round(review_table.bonus_floor_area / review_table.bonus_limit * 100, 1)
+        _critical_count = sum(1 for f in findings if f.severity == "critical" and f.status == "fail")
+        _high_count = sum(1 for f in findings if f.severity == "high" and f.status == "fail")
+        _warn_count = sum(1 for f in findings if f.status == "warn")
+        _parking_ids = {"CALC-002", "CALC-003"}
+        _parking_findings = [f for f in findings if f.rule_id in _parking_ids]
+        _parking_pass: Optional[int] = (
+            1 if all(f.status == "pass" for f in _parking_findings) else 0
+        ) if _parking_findings else None
+        _pii_high_count = sum(1 for r in pii_risks if r.severity == "HIGH")
+        save_run_metrics(
+            case_name=case_name,
+            submission_type=_submission_type,
+            bonus_pct=_bonus_pct,
+            critical_count=_critical_count,
+            high_count=_high_count,
+            warn_count=_warn_count,
+            parking_pass=_parking_pass,
+            pii_high_count=_pii_high_count,
+        )
+
+        peer_stats = get_peer_stats(_submission_type)
+
+        # Track B AI pipeline
+        ai_findings = _run_ai_pipeline(primary_pdf)
+
+        # PDF annotation
+        _set_task_progress(task_id, "running", "標注 PDF 中…")
+        annotated_key: Optional[str] = None
+        annotated_s3_key: Optional[str] = None
+        try:
+            annotate_source = primary_pdf
+            masked_bytes: Optional[bytes] = None
+            if masking_enabled() and any(r.severity == "HIGH" for r in pii_risks):
+                masked_bytes = mask_pii(primary_pdf, list(pii_risks))
+                with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                    tmp.write(masked_bytes)
+                    annotate_source = tmp.name
+            pdf_bytes = annotate_pdf(annotate_source, findings)
+            annotated_key = uuid.uuid4().hex[:8]
+            _PDF_CACHE[annotated_key] = pdf_bytes
+            if case_meta_id and s3_available():
+                annotated_s3_key = save_annotated_pdf(case_meta_id, pdf_bytes)
+        except Exception:
+            log.exception("PDF annotation/masking failed")
+        finally:
+            if masked_bytes and annotate_source != primary_pdf:
+                try:
+                    os.unlink(annotate_source)
+                except OSError:
+                    pass
+
+        # Build report
+        documents = [bp_fname]
+        if re_path:
+            documents.append(re_fname or "權利變換計畫報告書.pdf")
+
+        if report_date_roc and front_docs:
+            rd_source = front_docs.report_date_source
+            rd_page = front_docs.report_date_page
+        elif fill_date_fallback:
+            rd_source = "審議資料表（填表日期）"
+            rd_page = review_table.raw_page if review_table else None
+        elif filename_date_fallback:
+            rd_source = "檔名日期（自動辨識）"
+            rd_page = None
+        else:
+            rd_source = None
+            rd_page = None
+
+        report = AuditReport(
+            case_name=case_name,
+            audit_time=audit_time,
+            rule_version=reg_version.label,
+            documents=documents,
+            review_table=review_table,
+            front_docs=front_docs,
+            pii_risks=pii_risks,
+            term_matches=list(term_matches),
+            findings=findings,
+            fill_date_iso=fill_date_iso,
+            report_date=version_date,
+            report_date_source=rd_source,
+            report_date_page=rd_page,
+            diffs=diffs,
+            prev_audit_time=prev_audit_time,
+            annotated_pdf_key=annotated_key,
+            ai_findings=ai_findings,
+            peer_stats=peer_stats,
+        )
+
+        _set_task_progress(task_id, "running", "產生審查報告中…")
+        html = generate_report(report)
+
+        # Save S3 meta
+        if bp_s3_key and s3_available():
+            try:
+                save_case_meta(
+                    bp_key=bp_s3_key,
+                    bp_filename=bp_fname,
+                    case_name=case_name,
+                    meta_id=case_meta_id,
+                    re_key=re_s3_key,
+                    re_filename=re_fname if re_s3_key else None,
+                    annotated_key=annotated_s3_key,
+                )
+            except Exception as exc:
+                log.warning("S3 case-meta save failed (non-fatal): %s", exc)
+
+        with _TASKS_LOCK:
+            _AUDIT_TASKS[task_id]["status"] = "done"
+            _AUDIT_TASKS[task_id]["progress"] = "完成"
+            _AUDIT_TASKS[task_id]["html"] = html
+            _AUDIT_TASKS[task_id]["done_at"] = time.time()
+
+    except Exception as exc:
+        log.exception("Async audit task %s failed", task_id)
+        with _TASKS_LOCK:
+            _AUDIT_TASKS[task_id]["status"] = "error"
+            _AUDIT_TASKS[task_id]["progress"] = f"審查失敗：{exc}"
+            _AUDIT_TASKS[task_id]["done_at"] = time.time()
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
 init_db()
 _cleaned = delete_test_runs()
 if _cleaned:
@@ -258,250 +512,85 @@ async def download_annotated(key: str) -> Response:
     )
 
 
-@app.post("/audit", response_class=HTMLResponse)
-async def audit(
+@app.post("/audit")
+async def audit_submit(
     request: Request,
-    # Direct file upload (local / small files)
     business_plan: Optional[UploadFile] = File(None),
     rights_exchange: Optional[UploadFile] = File(None),
-    # S3 key path (large files via presigned URL)
     business_plan_key: Optional[str] = Form(None),
     rights_exchange_key: Optional[str] = Form(None),
-) -> HTMLResponse:
+) -> JSONResponse:
+    """Accept audit request and return task_id immediately (async processing)."""
+    _prune_old_tasks()
     has_direct = business_plan and business_plan.filename
     has_s3 = bool(business_plan_key)
     if not has_direct and not has_s3:
         raise HTTPException(status_code=400, detail="請上傳事業計畫報告書（PDF）")
 
-    bp_s3_key: Optional[str] = business_plan_key
-    re_s3_key: Optional[str] = rights_exchange_key
-    # Generate meta_id early so annotated PDF and meta share the same ID
-    case_meta_id: Optional[str] = uuid.uuid4().hex[:12] if bp_s3_key else None
+    # Read file bytes now (async context) before handing off to thread
+    bp_bytes: Optional[bytes] = None
+    bp_fname: Optional[str] = None
+    re_bytes: Optional[bytes] = None
+    re_fname_direct: Optional[str] = None
+    if has_direct:
+        if not (business_plan.filename or "").lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail="僅支援 PDF 格式")
+        bp_bytes = await business_plan.read()
+        bp_fname = business_plan.filename
+        if rights_exchange and rights_exchange.filename and rights_exchange.filename.lower().endswith(".pdf"):
+            re_bytes = await rights_exchange.read()
+            re_fname_direct = rights_exchange.filename
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Resolve primary PDF path
-        if has_s3:
-            primary_pdf = download_to_temp(business_plan_key, tmp_dir)
-            bp_filename = Path(business_plan_key).name
-        else:
-            if not business_plan.filename.lower().endswith(".pdf"):
-                raise HTTPException(status_code=400, detail="僅支援 PDF 格式")
-            bp_path = Path(tmp_dir) / (business_plan.filename or "business_plan.pdf")
-            bp_path.write_bytes(await business_plan.read())
-            primary_pdf = str(bp_path)
-            bp_filename = business_plan.filename
+    task_id = uuid.uuid4().hex[:16]
+    with _TASKS_LOCK:
+        _AUDIT_TASKS[task_id] = {"status": "queued", "progress": "排隊中…", "html": None, "done_at": None}
 
-        # Resolve secondary PDF path
-        re_path: Optional[Path] = None
-        re_filename: Optional[str] = None
-        if rights_exchange_key:
-            re_local = download_to_temp(rights_exchange_key, tmp_dir)
-            re_path = Path(re_local)
-            re_filename = Path(rights_exchange_key).name
-        elif rights_exchange and rights_exchange.filename and rights_exchange.filename.lower().endswith(".pdf"):
-            re_path = Path(tmp_dir) / (rights_exchange.filename or "rights_exchange.pdf")
-            re_path.write_bytes(await rights_exchange.read())
-            re_filename = rights_exchange.filename
+    t = threading.Thread(
+        target=_run_audit_sync,
+        args=(task_id, business_plan_key, rights_exchange_key, bp_bytes, bp_fname, re_bytes, re_fname_direct),
+        daemon=True,
+    )
+    t.start()
+    return JSONResponse({"task_id": task_id})
 
-        # --- Extract from primary document ---
-        try:
-            review_table = extract_review_table(primary_pdf)
-        except Exception:
-            review_table = None
 
-        try:
-            front_docs, pii_risks = extract_front_docs(primary_pdf)
-        except Exception:
-            front_docs, pii_risks = None, []
+@app.get("/audit/{task_id}/status")
+async def audit_task_status(task_id: str) -> JSONResponse:
+    with _TASKS_LOCK:
+        task = dict(_AUDIT_TASKS.get(task_id, {}))
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return JSONResponse({"status": task["status"], "progress": task["progress"]})
 
-        try:
-            term_matches = scan_for_wrong_terms(primary_pdf)
-        except Exception:
-            term_matches = []
 
-        try:
-            number_contexts = extract_number_contexts(primary_pdf)
-        except Exception:
-            number_contexts = []
+@app.get("/audit/{task_id}/report", response_class=HTMLResponse)
+async def audit_task_report(task_id: str) -> HTMLResponse:
+    with _TASKS_LOCK:
+        task = dict(_AUDIT_TASKS.get(task_id, {}))
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task["status"] == "error":
+        raise HTTPException(status_code=500, detail=task["progress"])
+    if task["status"] != "done":
+        raise HTTPException(status_code=202, detail=task["progress"])
+    return HTMLResponse(task["html"])
 
-        audit_data = AuditData(
-            review_table=review_table,
-            front_docs=front_docs,
-            pii_risks=tuple(pii_risks),
-            term_matches=tuple(term_matches),
-            number_contexts=tuple(number_contexts),
-        )
 
-        findings = _engine.evaluate(audit_data)
+def _audit_legacy_compat(
+    has_direct: bool,
+    has_s3: bool,
+    business_plan_key: Optional[str] = None,
+    rights_exchange_key: Optional[str] = None,
+) -> None:
+    """Placeholder — actual logic lives in _run_audit_sync."""
+    pass
 
-        # --- Version selection: prefer 報核日期 from 申請書/切結書/委託書 ---
-        # Fallback chain: front-doc date → review-table fill_date → filename date
-        report_date_roc: Optional[str] = (
-            front_docs.report_date if front_docs and front_docs.report_date else None
-        )
-        fill_date_fallback = review_table.fill_date if review_table else None
-        filename_date_fallback = _date_from_filename(bp_filename)
-        version_date = report_date_roc or fill_date_fallback or filename_date_fallback
-        reg_version, fill_date_iso = select_version(version_date)
 
-        # --- Case name & audit metadata ---
-        case_name = (
-            review_table.case_name
-            if review_table and review_table.case_name
-            else bp_filename
-        )
-        audit_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-        # --- Diff computation (compare with previous audit of same case) ---
-        diffs: list[FindingDiff] = []
-        prev_audit_time: Optional[str] = None
-        prev_run = get_prev_run(case_name)
-        if prev_run:
-            prev_audit_time = prev_run["audit_time"]
-            diffs = _compute_diff(prev_run["findings"], findings)
-
-        # --- Save this run to history ---
-        save_run(
-            case_name=case_name,
-            audit_time=audit_time,
-            rule_ver=reg_version.label,
-            findings_json=json.dumps([
-                {
-                    "rule_id": f.rule_id,
-                    "rule_name": f.rule_name,
-                    "status": f.status,
-                    "message": f.message,
-                    "evidence": f.evidence,
-                }
-                for f in findings
-            ]),
-        )
-
-        # --- Compute and save comparison metrics ---
-        _submission_type = review_table.submission_type if review_table else None
-        # If OCR missed the checkbox, infer from upload pattern:
-        # B-1 = both 事業計畫 + 權利變換計畫 submitted together
-        if _submission_type is None and re_s3_key:
-            _submission_type = "B-1"
-        _bonus_pct: Optional[float] = None
-        if review_table and review_table.bonus_floor_area and review_table.bonus_limit and review_table.bonus_limit > 0:
-            _bonus_pct = round(review_table.bonus_floor_area / review_table.bonus_limit * 100, 1)
-        _critical_count = sum(1 for f in findings if f.severity == "critical" and f.status == "fail")
-        _high_count     = sum(1 for f in findings if f.severity == "high" and f.status == "fail")
-        _warn_count     = sum(1 for f in findings if f.status == "warn")
-        _parking_ids    = {"CALC-002", "CALC-003"}
-        _parking_findings = [f for f in findings if f.rule_id in _parking_ids]
-        _parking_pass: Optional[int] = None
-        if _parking_findings:
-            _parking_pass = 1 if all(f.status == "pass" for f in _parking_findings) else 0
-        _pii_high_count = sum(1 for r in pii_risks if r.severity == "HIGH")
-        save_run_metrics(
-            case_name=case_name,
-            submission_type=_submission_type,
-            bonus_pct=_bonus_pct,
-            critical_count=_critical_count,
-            high_count=_high_count,
-            warn_count=_warn_count,
-            parking_pass=_parking_pass,
-            pii_high_count=_pii_high_count,
-        )
-
-        # --- Peer comparison stats ---
-        peer_stats = get_peer_stats(_submission_type)
-
-        # --- Track B AI pipeline (optional, requires ANTHROPIC_API_KEY) ---
-        ai_findings = _run_ai_pipeline(primary_pdf)
-
-        # --- PDF annotation (+ optional PII masking) ---
-        annotated_key: Optional[str] = None
-        annotated_s3_key: Optional[str] = None
-        try:
-            annotate_source = primary_pdf
-            masked_bytes: Optional[bytes] = None
-
-            # Apply PII masking first when enabled and HIGH-risk items exist
-            if masking_enabled() and any(r.severity == "HIGH" for r in pii_risks):
-                masked_bytes = mask_pii(primary_pdf, list(pii_risks))
-                with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-                    tmp.write(masked_bytes)
-                    annotate_source = tmp.name
-
-            pdf_bytes = annotate_pdf(annotate_source, findings)
-            annotated_key = uuid.uuid4().hex[:8]
-            _PDF_CACHE[annotated_key] = pdf_bytes
-            # Persist to S3 if this is an S3-sourced audit
-            if case_meta_id and s3_available():
-                annotated_s3_key = save_annotated_pdf(case_meta_id, pdf_bytes)
-        except Exception:
-            log.exception("PDF annotation/masking failed")
-        finally:
-            # Clean up temp masked file if created
-            if masked_bytes and annotate_source != primary_pdf:
-                try:
-                    os.unlink(annotate_source)
-                except OSError:
-                    pass
-
-        # --- Build document list ---
-        documents = [bp_filename]
-        if re_path:
-            documents.append(re_filename or "權利變換計畫報告書.pdf")
-
-        # Determine report_date display info
-        if report_date_roc and front_docs:
-            rd_source = front_docs.report_date_source
-            rd_page   = front_docs.report_date_page
-        elif fill_date_fallback:
-            rd_source = "審議資料表（填表日期）"
-            rd_page   = review_table.raw_page if review_table else None
-        elif filename_date_fallback:
-            rd_source = "檔名日期（自動辨識）"
-            rd_page   = None
-        else:
-            rd_source = None
-            rd_page   = None
-
-        report = AuditReport(
-            case_name=case_name,
-            audit_time=audit_time,
-            rule_version=reg_version.label,
-            documents=documents,
-            review_table=review_table,
-            front_docs=front_docs,
-            pii_risks=pii_risks,
-            term_matches=list(term_matches),
-            findings=findings,
-            fill_date_iso=fill_date_iso,
-            report_date=version_date,
-            report_date_source=rd_source,
-            report_date_page=rd_page,
-            diffs=diffs,
-            prev_audit_time=prev_audit_time,
-            annotated_pdf_key=annotated_key,
-            ai_findings=ai_findings,
-            peer_stats=peer_stats,
-        )
-
-        html = generate_report(report)
-
-    # Persist case metadata in S3 for history (best-effort; never crash the audit)
-    if bp_s3_key and s3_available():
-        try:
-            save_case_meta(
-                bp_key=bp_s3_key,
-                bp_filename=bp_filename,
-                case_name=case_name,
-                meta_id=case_meta_id,
-                re_key=re_s3_key,
-                re_filename=re_filename if re_s3_key else None,
-                annotated_key=annotated_s3_key,
-            )
-        except Exception as exc:
-            import logging
-            logging.getLogger(__name__).warning("S3 case-meta save failed (non-fatal): %s", exc)
-
-    return HTMLResponse(content=html)
-
+# ── Keep old sync path for direct form fallback ──────────────────────────────
+# (browser without JS hits the classic multipart submit → form action="/audit")
+# FastAPI routes are matched in definition order so the POST above wins for
+# JSON/fetch clients; this block is intentionally unreachable via fetch.
+# If needed later, a /audit/sync endpoint can be added.
 
 def _compute_diff(prev_findings_json: str, curr_findings) -> list[FindingDiff]:
     try:

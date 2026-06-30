@@ -148,11 +148,28 @@ def test_audit_via_s3_key(tmp_path):
     )
     assert put_resp.status_code == 200, f"S3 PUT failed: {put_resp.status_code}"
 
-    # Step 3: call /audit with S3 key
+    # Step 3: call /audit with S3 key — now returns task_id immediately
     audit_resp = client.post("/audit", data={"business_plan_key": key})
     assert audit_resp.status_code == 200
-    assert "審查報告" in audit_resp.text or "案件名稱" in audit_resp.text or "DOCTYPE" in audit_resp.text
-    # File is now kept in S3 as history (not deleted)
+    data = audit_resp.json()
+    assert "task_id" in data
+
+    # Step 4: poll until done (background thread runs synchronously in TestClient)
+    task_id = data["task_id"]
+    import time
+    for _ in range(60):
+        status_resp = client.get(f"/audit/{task_id}/status")
+        assert status_resp.status_code == 200
+        s = status_resp.json()
+        if s["status"] == "done":
+            report_resp = client.get(f"/audit/{task_id}/report")
+            assert report_resp.status_code == 200
+            assert "DOCTYPE" in report_resp.text or "審查報告" in report_resp.text
+            return
+        if s["status"] == "error":
+            raise AssertionError(f"Audit task failed: {s['progress']}")
+        time.sleep(2)
+    raise AssertionError("Audit task timed out in test")
 
 
 # ── cases history endpoint ───────────────────────────────────────────────────
