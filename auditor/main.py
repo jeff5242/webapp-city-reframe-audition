@@ -9,6 +9,7 @@ import tempfile
 import threading
 import time
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -245,10 +246,26 @@ def _run_ai_pipeline(
     return ai_findings
 
 
+def _warmup_ocr() -> None:
+    """Pre-warm OCR model so the first upload request has no cold-start delay."""
+    try:
+        from .parsers.ocr_reader import _get_reader
+        _get_reader()
+    except Exception as exc:
+        log.debug("OCR warmup failed (non-fatal): %s", exc)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    threading.Thread(target=_warmup_ocr, daemon=True, name="ocr-warmup").start()
+    yield
+
+
 app = FastAPI(
     title="臺北市都市更新審議自動審查",
     description="111年版規則 POC",
     version="0.2.0",
+    lifespan=lifespan,
 )
 
 _TEMPLATES_DIR = Path(__file__).parent.parent / "templates"

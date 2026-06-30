@@ -342,3 +342,25 @@ def test_run_ai_pipeline_skips_cross_doc_when_no_secondary(monkeypatch):
         main_mod._run_ai_pipeline("primary.pdf", reg_year="111", secondary_pdf=None)
 
     mock_compare.assert_not_called()
+
+
+# ── startup OCR warmup (Item 5) ───────────────────────────────────────────────
+
+def test_ocr_warmup_called_on_startup():
+    """OCR _get_reader must be called in a background thread during app startup."""
+    from unittest.mock import patch, MagicMock
+    from fastapi.testclient import TestClient
+    import auditor.main as main_mod
+
+    call_log: list[str] = []
+
+    def fake_get_reader():
+        call_log.append("called")
+
+    with patch("auditor.parsers.ocr_reader._get_reader", side_effect=fake_get_reader):
+        with TestClient(main_mod.app) as tc:
+            # lifespan runs on __enter__; give warmup thread a moment
+            import time as _time
+            _time.sleep(0.1)
+
+    assert "called" in call_log, "_get_reader was not invoked during startup warmup"
