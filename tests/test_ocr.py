@@ -328,6 +328,58 @@ def test_deskew_corrects_slight_rotation():
     )
 
 
+# ── Sauvola binarization (Item 4) ────────────────────────────────────────────
+
+def test_binarize_produces_binary_image():
+    """Output of _binarize must contain only pixel values 0 and 255."""
+    import numpy as np
+    from auditor.parsers.ocr_reader import _binarize
+
+    rng = np.random.default_rng(42)
+    gray = rng.integers(0, 256, (100, 100), dtype=np.uint8)
+    result = _binarize(gray)
+
+    unique = set(result.flatten().tolist())
+    assert unique <= {0, 255}, f"Non-binary values found: {unique - {0, 255}}"
+
+
+def test_binarize_fallback_when_skimage_unavailable(monkeypatch):
+    """_binarize must fall back to adaptive threshold if scikit-image is absent."""
+    import sys
+    import numpy as np
+    from unittest.mock import patch
+
+    # Remove skimage from sys.modules to simulate unavailability
+    with patch.dict(sys.modules, {"skimage": None, "skimage.filters": None}):
+        import importlib
+        import auditor.parsers.ocr_reader as mod
+        importlib.reload(mod)
+
+        rng = np.random.default_rng(0)
+        gray = rng.integers(0, 256, (64, 64), dtype=np.uint8)
+        result = mod._binarize(gray)
+
+    # Must still produce a valid binary image
+    unique = set(result.flatten().tolist())
+    assert unique <= {0, 255}
+
+
+def test_binarize_sauvola_preferred_when_available():
+    """When scikit-image is importable, _binarize must use Sauvola (not adaptive)."""
+    import numpy as np
+    from unittest.mock import patch, MagicMock
+    import auditor.parsers.ocr_reader as mod
+
+    mock_sauvola = MagicMock(return_value=np.zeros((10, 10)))
+    with patch.dict("sys.modules", {"skimage": MagicMock(), "skimage.filters": MagicMock(threshold_sauvola=mock_sauvola)}):
+        import importlib
+        importlib.reload(mod)
+        gray = np.zeros((10, 10), dtype=np.uint8)
+        mod._binarize(gray)
+
+    mock_sauvola.assert_called_once()
+
+
 # ── confidence filtering (Item 2) ─────────────────────────────────────────────
 
 def test_ocr_min_confidence_constant_exists():
