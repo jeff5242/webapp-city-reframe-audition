@@ -256,6 +256,78 @@ def _make_png_bytes() -> bytes:
     return buf.getvalue()
 
 
+# ── deskew (Item 3) ──────────────────────────────────────────────────────────
+
+def test_deskew_handles_no_lines():
+    """_deskew must return the original image when no lines are detected."""
+    import numpy as np
+    from auditor.parsers.ocr_reader import _deskew
+
+    gray = np.zeros((100, 100), dtype=np.uint8)  # blank image → no edges → no lines
+    result = _deskew(gray)
+    assert result.shape == gray.shape
+
+
+def test_deskew_skips_large_angles():
+    """_deskew must return the original image when detected skew > 15°."""
+    import numpy as np
+    import cv2
+    from auditor.parsers.ocr_reader import _deskew
+
+    # Create an image with diagonal lines at ~30° to trigger the guard
+    gray = np.zeros((200, 200), dtype=np.uint8)
+    for i in range(200):
+        j = int(i * np.tan(np.radians(30)))
+        if 0 <= j < 200:
+            gray[i, j] = 255
+
+    original_sum = gray.sum()
+    result = _deskew(gray)
+    # Since angle > 15°, result should be the original (unchanged)
+    assert result.sum() == original_sum
+
+
+def test_deskew_corrects_slight_rotation():
+    """_deskew must reduce the skew angle for slightly tilted horizontal lines."""
+    import numpy as np
+    import cv2
+    from auditor.parsers.ocr_reader import _deskew
+
+    # Create an image with horizontal lines then rotate it by 5°
+    gray = np.zeros((300, 400), dtype=np.uint8)
+    for y in [75, 150, 225]:
+        gray[y, 50:350] = 255  # horizontal white lines
+
+    angle_deg = 5.0
+    M = cv2.getRotationMatrix2D((200, 150), angle_deg, 1.0)
+    rotated = cv2.warpAffine(gray, M, (400, 300), borderMode=cv2.BORDER_REPLICATE)
+
+    corrected = _deskew(rotated)
+
+    # Measure line angles in corrected image — they should be closer to 0 than in rotated
+    edges_rot = cv2.Canny(rotated, 50, 150, apertureSize=3)
+    edges_cor = cv2.Canny(corrected, 50, 150, apertureSize=3)
+
+    def _median_angle(edges: np.ndarray) -> float:
+        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=30, minLineLength=30, maxLineGap=5)
+        if lines is None:
+            return 0.0
+        angles = []
+        for ln in lines:
+            x1, y1, x2, y2 = ln[0]
+            if x2 != x1:
+                a = np.degrees(np.arctan2(y2 - y1, x2 - x1))
+                if abs(a) < 45:
+                    angles.append(a)
+        return float(np.median(angles)) if angles else 0.0
+
+    angle_before = abs(_median_angle(edges_rot))
+    angle_after = abs(_median_angle(edges_cor))
+    assert angle_after < angle_before, (
+        f"Deskew did not reduce skew: before={angle_before:.2f}°, after={angle_after:.2f}°"
+    )
+
+
 # ── confidence filtering (Item 2) ─────────────────────────────────────────────
 
 def test_ocr_min_confidence_constant_exists():

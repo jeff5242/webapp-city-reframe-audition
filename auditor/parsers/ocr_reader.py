@@ -132,11 +132,62 @@ _INIT_LOCK = threading.Lock()   # guards singleton initialisation
 _INFER_LOCK = threading.Lock()  # PaddleOCR inference is not thread-safe
 
 
-def _preprocess_for_ocr(img_array: "np.ndarray") -> "np.ndarray":  # type: ignore[name-defined]
-    """Enhance image quality before OCR: CLAHE → denoise → adaptive binarize.
+def _deskew(gray: "np.ndarray") -> "np.ndarray":  # type: ignore[name-defined]
+    """Detect and correct page skew using Hough line analysis.
 
-    Fixes common scanned-document issues: uneven lighting, scanner noise,
-    and low contrast that cause PaddleOCR to produce garbled Traditional Chinese.
+    Finds near-horizontal line segments, computes the median angle, and
+    rotates the image to compensate.  Skips correction when:
+    - No dominant angle is found (no lines / all vertical).
+    - The detected angle exceeds ±15° (likely a false positive from
+      decorative elements or non-text regions).
+
+    Falls back to the original image if OpenCV is unavailable or any
+    processing step raises.
+    """
+    try:
+        import cv2
+        import numpy as np
+
+        edges = cv2.Canny(gray, 50, 150, apertureSize=3)
+        lines = cv2.HoughLinesP(
+            edges, 1, np.pi / 180,
+            threshold=80, minLineLength=50, maxLineGap=10,
+        )
+        if lines is None:
+            return gray
+
+        angles = []
+        for line in lines:
+            x1, y1, x2, y2 = line[0]
+            if x2 != x1:
+                angle = np.degrees(np.arctan2(y2 - y1, x2 - x1))
+                if abs(angle) < 45:  # near-horizontal lines only
+                    angles.append(angle)
+
+        if not angles:
+            return gray
+
+        skew = float(np.median(angles))
+        if abs(skew) > 15:  # large angle is probably a false positive
+            return gray
+
+        h, w = gray.shape[:2]
+        M = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), skew, 1.0)
+        return cv2.warpAffine(
+            gray, M, (w, h),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_REPLICATE,
+        )
+    except Exception:
+        return gray
+
+
+def _preprocess_for_ocr(img_array: "np.ndarray") -> "np.ndarray":  # type: ignore[name-defined]
+    """Enhance image quality before OCR: deskew → CLAHE → denoise → binarize.
+
+    Fixes common scanned-document issues: slight page rotation, uneven
+    lighting, scanner noise, and low contrast that cause PaddleOCR to
+    produce garbled Traditional Chinese.
     Falls back to original array if OpenCV is unavailable.
     """
     try:
@@ -148,6 +199,8 @@ def _preprocess_for_ocr(img_array: "np.ndarray") -> "np.ndarray":  # type: ignor
             gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
         else:
             gray = img_array.copy()
+
+        gray = _deskew(gray)
 
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         enhanced = clahe.apply(gray)
