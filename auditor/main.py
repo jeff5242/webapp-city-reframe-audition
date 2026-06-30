@@ -40,7 +40,7 @@ from .extractors.term_checker import extract_number_contexts, scan_for_wrong_ter
 from .models import AiFinding, AuditData, AuditReport, FindingDiff
 from .reporters.html_reporter import generate_report
 from .rules.engine import build_default_engine
-from .storage.history import get_prev_run, get_peer_stats, init_db, save_run, save_run_metrics
+from .storage.history import delete_test_runs, get_prev_run, get_peer_stats, init_db, save_run, save_run_metrics
 from .version_selector import select_version
 
 _DOCS_DIR = Path(__file__).parent.parent / "docs"
@@ -191,6 +191,9 @@ _engine = build_default_engine()
 _PDF_CACHE: dict[str, bytes] = {}
 
 init_db()
+_cleaned = delete_test_runs()
+if _cleaned:
+    log.info("Startup cleanup: removed %d test run(s) from history", _cleaned)
 if s3_available():
     setup_bucket_encryption()
 
