@@ -73,7 +73,7 @@ def extract_pages_text(
     Pass order per page:
       1. pdfplumber  — handles native-text PDFs
       2. pymupdf     — second-pass for hybrid PDFs
-      3. EasyOCR     — third-pass for scanned/image-only pages
+      3. PaddleOCR   — third-pass for scanned/image-only pages
                        (only when ocr_image_pages=True, slower)
     """
     from .ocr_reader import ocr_pages
