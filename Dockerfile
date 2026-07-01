@@ -2,7 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# System deps for Pillow (used by pdfplumber)
+# System deps for Pillow (pdfplumber), OpenCV/PaddleOCR (libgl1, libglib2.0-0)
+# and PaddlePaddle's OpenMP runtime (libgomp1 — required or import fails at runtime).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev \
     zlib1g-dev \
@@ -10,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcb1 \
     libglib2.0-0 \
     libgl1 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies first (layer cache)
@@ -26,12 +28,15 @@ RUN pip install --no-cache-dir \
     "pymupdf>=1.23.0" \
     "boto3>=1.34.0" \
     "python-dotenv>=1.0.0" \
-    "easyocr>=1.7.0" \
+    "paddlepaddle>=2.6.0,<3.0.0" \
+    "paddleocr>=2.7.0,<3.0.0" \
+    "scikit-image>=0.21.0" \
     "pillow>=10.0.0" \
     "docling>=2.0.0"
 
-# Pre-download EasyOCR models so container startup is fast (no internet needed at runtime)
-RUN python3 -c "import easyocr; easyocr.Reader(['ch_tra', 'en'], gpu=False, verbose=False)" || true
+# Pre-download PaddleOCR models so container startup is fast (no internet needed at runtime).
+# Pinned to 2.x: the app uses the 2.x API (use_angle_cls/use_gpu/show_log, PPStructure).
+RUN python3 -c "from paddleocr import PaddleOCR; PaddleOCR(use_angle_cls=True, lang='chinese_cht', use_gpu=False, show_log=False)" || true
 
 # Copy source (after deps so source changes don't bust dep cache)
 COPY . .
