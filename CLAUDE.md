@@ -105,6 +105,7 @@ The next sprint task is wiring Track B into the `/audit` endpoint.
 
 1. **Extractors** (`auditor/extractors/`) — parse raw data from PDFs:
    - `review_table.py` — 審議資料表 (submission type, fill date, bonus FAR fields)
+   - `table_extractor.py` — hybrid gap-filler for the dense 審議資料表 grid: on-prem PaddleOCR PP-Structure table recognition first, then Claude vision (page image) escalation when critical-field coverage < 0.6. Only fills fields the text pass missed; never overwrites.
    - `front_docs.py` — 申請書/切結書/委託書 (report date, implementer name, PII)
    - `term_checker.py` — wrong terminology + number context extraction
 

@@ -91,8 +91,13 @@ def _find_review_table_page(pdf_path: str) -> tuple[Optional[int], str]:
     return None, ""
 
 
-def extract_review_table(pdf_path: str) -> Optional[ReviewTableData]:
-    """Find and extract 審議資料表 from a PDF. Returns None if not found."""
+def extract_review_table(pdf_path: str, enhance: bool = True) -> Optional[ReviewTableData]:
+    """Find and extract 審議資料表 from a PDF. Returns None if not found.
+
+    When *enhance* is True, gaps left by the text-regex pass are filled by the
+    hybrid structured extractor (on-prem PP-Structure → Claude vision fallback),
+    which is far more stable on this dense bordered grid.
+    """
     page_num, text = _find_review_table_page(pdf_path)
     if page_num is None:
         return None
@@ -102,7 +107,16 @@ def extract_review_table(pdf_path: str) -> Optional[ReviewTableData]:
     if not text.strip():
         text = extract_page_text(pdf_path, page_num)
 
-    return _parse_from_text(text, page_num)
+    data = _parse_from_text(text, page_num)
+
+    if enhance:
+        try:
+            from .table_extractor import enhance_review_table
+            data = enhance_review_table(pdf_path, data)
+        except Exception:  # pragma: no cover - defensive; enhancement is best-effort
+            pass
+
+    return data
 
 
 def _parse_from_text(text: str, page_num: int) -> ReviewTableData:
