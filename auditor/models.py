@@ -107,6 +107,11 @@ class AiFinding:
     detected_text: str    # detected_text, actual_value, or "計畫書 A vs B" summary
     reason: str
     page_number: int = 0
+    # Evidence grounding (Phase 5): whether detected_text was confirmed to
+    # appear in the source document, and the grounded quote (from offline
+    # verification or the Anthropic Citations API).
+    evidence_text: Optional[str] = None
+    evidence_verified: bool = False
 
 
 @dataclass

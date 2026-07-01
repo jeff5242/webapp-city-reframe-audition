@@ -143,6 +143,7 @@ All modules are in `auditor/parsing_pipeline/`. Each phase is independently impo
 | 4 | `llm_auditor.py` | Claude Haiku (default) `tool_use` → `LlmFinding`; optional Sonnet re-verify for critical findings |
 | 4b | `field_auditor.py` | LLM extraction of structured fields + rule validation (FAR ≤ 40%, consent ratios, date consistency) |
 | 4c | `cross_doc_comparator.py` | Compares 事業計畫書 vs 權利變換計畫書: land area (±0.5 m²), values (±1萬元), owner count (exact), implementer name (exact) |
+| 5 | `evidence_grounder.py` | Grounds LLM findings: `verify_quote()` offline substring check (NFKC + whitespace-tolerant) always runs; `fetch_citation()` escalates critical findings to the Anthropic **Citations API** for an authoritative, non-hallucinated cited quote. Populates `AiFinding.evidence_text`/`evidence_verified`. |
 
 **Key invariants:**
 - Use `page_range=(start, end)` (1-based, inclusive) in Docling — never `max_num_pages`, which marks any PDF with more pages as `valid=False`.
