@@ -197,9 +197,20 @@ All models are frozen dataclasses:
 | `tests/test_field_auditor.py` | validate_fields, _parse_extracted, extract_and_validate (LLM mocked) |
 | `tests/test_cross_doc_comparator.py` | _compare (pure), compare_documents (LLM mocked) |
 | `tests/test_rules.py` | all 14 rule classes |
-| `tests/test_api.py` | FastAPI endpoints |
-| `tests/test_ocr.py` | EasyOCR extraction |
+| `tests/test_api.py` | FastAPI endpoints, Track B wiring, evidence grounding integration |
+| `tests/test_ocr.py` | OCR extraction (PaddleOCR path) |
+| `tests/test_evidence_grounder.py` | offline verify + Citations API (mocked) |
+| `tests/test_confidence_scorer.py` | composite confidence + human-review routing |
+| `tests/test_eval_harness.py` | precision/recall harness + field-validator gold set |
 | `tests/test_s3.py` | S3 helpers (mocked) |
+
+### Evaluation harness (`auditor/eval/`)
+
+`harness.py` computes precision/recall/F1 over rule_id sets; `field_gold.py`
+runs `field_auditor.validate_fields()` against `tests/gold/field_auditor_gold.json`
+(annotated cases) with zero API cost. Run: `python -m pytest tests/test_eval_harness.py -q`.
+The deterministic field validator scores 1.0/1.0; the harness doubles as a
+regression guard (changing a threshold without updating the gold set fails CI).
 
 LLM-dependent tests mock `anthropic` via `sys.modules` patching + `importlib.reload()`. Path-validation-dependent tests patch `validate_pdf_path` with `side_effect=lambda p, **kw: p`.
 
