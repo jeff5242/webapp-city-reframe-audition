@@ -92,13 +92,65 @@ def _load_wiki_rules() -> str:
         return "臺北市都市更新111年版法規重點（都更條例、容積獎勵辦法）"
 
 
-def _run_ai_pipeline(pdf_path: str) -> List[AiFinding]:
-    """Run Track B AI pipeline; returns [] when key absent or any step fails."""
+def _pdf_to_markdown(pdf_path: str) -> str:
+    """Convert a PDF to Markdown via triage → Docling (text) + Surya (scanned).
+
+    Returns the combined Markdown, or "" if nothing could be extracted.
+    Each reader is optional; a missing dependency logs and is skipped.
+    """
+    from .parsing_pipeline.triage import triage_pdf, text_page_indices, scanned_page_indices
+
+    page_classes = triage_pdf(pdf_path)
+    text_pages = text_page_indices(page_classes)
+    scanned_pages = scanned_page_indices(page_classes)
+
+    parts: List[str] = []
+
+    if text_pages:
+        try:
+            from .parsing_pipeline.docling_reader import parse_pages_to_markdown
+            md = parse_pages_to_markdown(pdf_path, text_pages)
+            if md.strip():
+                parts.append(md)
+        except Exception as exc:
+            log.debug("Docling unavailable or failed: %s", exc)
+
+    if scanned_pages:
+        try:
+            from .parsing_pipeline.surya_reader import ocr_pages
+            ocr_result = ocr_pages(pdf_path, scanned_pages)
+            if ocr_result:
+                parts.append("\n".join(ocr_result.values()))
+        except Exception as exc:
+            log.debug("Surya unavailable or failed: %s", exc)
+
+    return "\n\n".join(parts)
+
+
+def _reg_year_from_version(reg_version) -> str:
+    """Extract the year digits (e.g. '111') from a RegulationVersion label like '111年版'."""
+    try:
+        return reg_version.label.replace("年版", "").strip()
+    except Exception:
+        return "111"
+
+
+def _run_ai_pipeline(
+    pdf_path: str,
+    reg_year: str = "111",
+    secondary_pdf: Optional[str] = None,
+) -> List[AiFinding]:
+    """Run Track B AI pipeline; returns [] when key absent or any step fails.
+
+    Args:
+        pdf_path:      primary document (事業計畫書) PDF path
+        reg_year:      regulation year ("107"/"108"/"111"/"113") for field validation
+        secondary_pdf: optional 權利變換計畫書 PDF for cross-document comparison
+    """
     if not os.getenv("ANTHROPIC_API_KEY"):
         return []
 
     try:
-        from .parsing_pipeline.triage import triage_pdf, text_page_indices, scanned_page_indices
         from .parsing_pipeline.chunker import chunk_markdown
         from .parsing_pipeline.llm_auditor import audit_chunks
         from .parsing_pipeline.field_auditor import extract_and_validate
@@ -110,31 +162,7 @@ def _run_ai_pipeline(pdf_path: str) -> List[AiFinding]:
     ai_findings: List[AiFinding] = []
 
     try:
-        page_classes = triage_pdf(pdf_path)
-        text_pages = text_page_indices(page_classes)
-        scanned_pages = scanned_page_indices(page_classes)
-
-        parts: List[str] = []
-
-        if text_pages:
-            try:
-                from .parsing_pipeline.docling_reader import parse_pages_to_markdown
-                md = parse_pages_to_markdown(pdf_path, text_pages)
-                if md.strip():
-                    parts.append(md)
-            except Exception as exc:
-                log.debug("Docling unavailable or failed: %s", exc)
-
-        if scanned_pages:
-            try:
-                from .parsing_pipeline.surya_reader import ocr_pages
-                ocr_result = ocr_pages(pdf_path, scanned_pages)
-                if ocr_result:
-                    parts.append("\n".join(ocr_result.values()))
-            except Exception as exc:
-                log.debug("Surya unavailable or failed: %s", exc)
-
-        combined_md = "\n\n".join(parts)
+        combined_md = _pdf_to_markdown(pdf_path)
         if not combined_md.strip():
             return []
 
@@ -155,7 +183,7 @@ def _run_ai_pipeline(pdf_path: str) -> List[AiFinding]:
             log.error("LLM audit error: %s", exc)
 
         try:
-            _, field_findings = extract_and_validate(combined_md)
+            _, field_findings = extract_and_validate(combined_md, reg_year=reg_year)
             for f in field_findings:
                 ai_findings.append(AiFinding(
                     source="field",
@@ -168,6 +196,28 @@ def _run_ai_pipeline(pdf_path: str) -> List[AiFinding]:
                 ))
         except Exception as exc:
             log.error("Field audit error: %s", exc)
+
+        # ── Cross-document comparison (事業計畫書 vs 權利變換計畫書) ──
+        if secondary_pdf:
+            try:
+                from .parsing_pipeline.cross_doc_comparator import compare_documents
+                secondary_md = _pdf_to_markdown(secondary_pdf)
+                if secondary_md.strip():
+                    for f in compare_documents(combined_md, secondary_md):
+                        ai_findings.append(AiFinding(
+                            source="cross",
+                            rule_id=f.rule_id,
+                            severity=f.severity,
+                            field_name=f.field_name,
+                            detected_text=(
+                                f"事業計畫書：{f.business_plan_value}／"
+                                f"權利變換計畫書：{f.rights_exchange_value}"
+                            ),
+                            reason=f.reason,
+                            page_number=0,
+                        ))
+            except Exception as exc:
+                log.error("Cross-doc comparison error: %s", exc)
 
     except Exception as exc:
         log.error("Track B pipeline error: %s", exc)
@@ -343,8 +393,13 @@ def _run_audit_sync(
 
         peer_stats = get_peer_stats(_submission_type)
 
-        # Track B AI pipeline
-        ai_findings = _run_ai_pipeline(primary_pdf)
+        # Track B AI pipeline — pass regulation year for field validation and
+        # the secondary PDF (if present) for cross-document comparison.
+        ai_findings = _run_ai_pipeline(
+            primary_pdf,
+            reg_year=_reg_year_from_version(reg_version),
+            secondary_pdf=str(re_path) if re_path else None,
+        )
 
         # PDF annotation
         _set_task_progress(task_id, "running", "標注 PDF 中…")

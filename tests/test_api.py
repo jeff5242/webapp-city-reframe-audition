@@ -207,3 +207,106 @@ def test_audit_non_pdf_returns_400():
         files={"business_plan": ("test.txt", b"not a pdf", "text/plain")},
     )
     assert resp.status_code == 400
+
+
+# ── Track B wiring: reg_year + cross-doc (Phase 1) ────────────────────────────
+
+def test_reg_year_from_version_extracts_year():
+    from auditor.main import _reg_year_from_version
+    from auditor.version_selector import RegulationVersion
+
+    assert _reg_year_from_version(RegulationVersion("113年版", "2024-12-03", "")) == "113"
+    assert _reg_year_from_version(RegulationVersion("111年版", "2022-03-24", "2024-12-02")) == "111"
+
+
+def test_reg_year_from_version_falls_back_on_bad_input():
+    from auditor.main import _reg_year_from_version
+
+    class Broken:
+        @property
+        def label(self):
+            raise ValueError("no label")
+
+    assert _reg_year_from_version(Broken()) == "111"
+
+
+def test_run_ai_pipeline_returns_empty_without_api_key(monkeypatch):
+    from auditor.main import _run_ai_pipeline
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert _run_ai_pipeline("any.pdf") == []
+
+
+def test_run_ai_pipeline_passes_reg_year_to_field_auditor(monkeypatch):
+    """reg_year must be forwarded to extract_and_validate."""
+    from unittest.mock import patch, MagicMock
+    import auditor.main as main_mod
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    captured = {}
+
+    def fake_extract_and_validate(md, reg_year="111"):
+        captured["reg_year"] = reg_year
+        return (MagicMock(), [])
+
+    with patch.object(main_mod, "_pdf_to_markdown", return_value="some markdown"), \
+         patch("auditor.parsing_pipeline.chunker.chunk_markdown", return_value=["chunk"]), \
+         patch("auditor.parsing_pipeline.llm_auditor.audit_chunks", return_value=[]), \
+         patch("auditor.parsing_pipeline.field_auditor.extract_and_validate",
+               side_effect=fake_extract_and_validate):
+        main_mod._run_ai_pipeline("primary.pdf", reg_year="113")
+
+    assert captured.get("reg_year") == "113"
+
+
+def test_run_ai_pipeline_runs_cross_doc_when_secondary_present(monkeypatch):
+    """compare_documents must run and produce cross-source findings."""
+    from unittest.mock import patch, MagicMock
+    import auditor.main as main_mod
+    from auditor.parsing_pipeline.cross_doc_comparator import CrossDocFinding
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    cross_finding = CrossDocFinding(
+        field_name="更新單元總面積",
+        rule_id="CONS-AREA-001",
+        severity="critical",
+        business_plan_value="1000.0 m²",
+        rights_exchange_value="1200.0 m²",
+        reason="面積不一致",
+    )
+
+    with patch.object(main_mod, "_pdf_to_markdown", return_value="markdown"), \
+         patch("auditor.parsing_pipeline.chunker.chunk_markdown", return_value=["chunk"]), \
+         patch("auditor.parsing_pipeline.llm_auditor.audit_chunks", return_value=[]), \
+         patch("auditor.parsing_pipeline.field_auditor.extract_and_validate",
+               return_value=(MagicMock(), [])), \
+         patch("auditor.parsing_pipeline.cross_doc_comparator.compare_documents",
+               return_value=[cross_finding]) as mock_compare:
+        findings = main_mod._run_ai_pipeline(
+            "primary.pdf", reg_year="111", secondary_pdf="secondary.pdf"
+        )
+
+    mock_compare.assert_called_once()
+    cross = [f for f in findings if f.source == "cross"]
+    assert len(cross) == 1
+    assert cross[0].rule_id == "CONS-AREA-001"
+    assert "1000.0 m²" in cross[0].detected_text
+    assert "1200.0 m²" in cross[0].detected_text
+
+
+def test_run_ai_pipeline_skips_cross_doc_when_no_secondary(monkeypatch):
+    """compare_documents must NOT run when secondary_pdf is None."""
+    from unittest.mock import patch, MagicMock
+    import auditor.main as main_mod
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    with patch.object(main_mod, "_pdf_to_markdown", return_value="markdown"), \
+         patch("auditor.parsing_pipeline.chunker.chunk_markdown", return_value=["chunk"]), \
+         patch("auditor.parsing_pipeline.llm_auditor.audit_chunks", return_value=[]), \
+         patch("auditor.parsing_pipeline.field_auditor.extract_and_validate",
+               return_value=(MagicMock(), [])), \
+         patch("auditor.parsing_pipeline.cross_doc_comparator.compare_documents") as mock_compare:
+        main_mod._run_ai_pipeline("primary.pdf", reg_year="111", secondary_pdf=None)
+
+    mock_compare.assert_not_called()
