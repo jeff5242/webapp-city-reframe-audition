@@ -47,7 +47,7 @@ def _find_review_table_page(pdf_path: str) -> tuple[Optional[int], str]:
     """Find the 審議資料表 page and return (page_num, text).
 
     First pass: pdfplumber (fast, works for text-based PDFs).
-    Second pass: EasyOCR on image pages (fallback for scanned PDFs).
+    Second pass: PaddleOCR on image pages (fallback for scanned PDFs).
     Returns (None, "") if not found.
     """
     import unicodedata
