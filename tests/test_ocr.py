@@ -151,3 +151,334 @@ def test_extract_front_docs_no_ocr_flag_skips_ocr():
          patch("auditor.parsers.ocr_reader.ocr_pages") as mock_ocr:
         extract_front_docs("fake.pdf", use_ocr=False)
         mock_ocr.assert_not_called()
+
+
+# ── PaddleOCR integration (Item 1) ───────────────────────────────────────────
+
+def test_parse_paddle_result_empty_on_none():
+    from auditor.parsers.ocr_reader import _parse_paddle_result
+    assert _parse_paddle_result(None) == ""
+    assert _parse_paddle_result([]) == ""
+
+
+def test_parse_paddle_result_filters_low_confidence():
+    """Detections below _OCR_MIN_CONFIDENCE must be excluded."""
+    from auditor.parsers.ocr_reader import _parse_paddle_result, _OCR_MIN_CONFIDENCE
+    detections = [
+        [None, ("高信心", 0.95)],
+        [None, ("低信心", _OCR_MIN_CONFIDENCE - 0.1)],
+        [None, ("邊界值", _OCR_MIN_CONFIDENCE)],
+    ]
+    text = _parse_paddle_result(detections)
+    assert "高信心" in text
+    assert "邊界值" in text
+    assert "低信心" not in text
+
+
+def test_parse_paddle_result_joins_lines():
+    from auditor.parsers.ocr_reader import _parse_paddle_result
+    detections = [
+        [None, ("line one", 0.9)],
+        [None, ("line two", 0.8)],
+    ]
+    assert _parse_paddle_result(detections) == "line one\nline two"
+
+
+def test_ocr_page_uses_paddle_reader(tmp_path):
+    """ocr_page must call reader.ocr() and return parsed text."""
+    import auditor.parsers.ocr_reader as mod
+    from unittest.mock import MagicMock, patch
+
+    fake_reader = MagicMock()
+    fake_reader.ocr.return_value = [[[None, ("測試文字", 0.95)]]]
+
+    fake_doc = MagicMock()
+    fake_pix = MagicMock()
+    fake_pix.tobytes.return_value = _make_png_bytes()
+    fake_doc.__len__ = lambda self: 5
+    fake_doc.__getitem__ = lambda self, i: MagicMock(
+        get_pixmap=lambda **kw: fake_pix
+    )
+    fake_doc.__enter__ = lambda self: self
+    fake_doc.__exit__ = MagicMock(return_value=False)
+
+    with patch.object(mod, "_FITZ_OK", True), \
+         patch.object(mod, "_paddle_reader", fake_reader), \
+         patch.object(mod, "_OCR_AVAILABLE", True), \
+         patch.object(mod._fitz, "open", return_value=fake_doc):
+        result = mod.ocr_page("fake.pdf", 0)
+
+    assert "測試文字" in result
+    fake_reader.ocr.assert_called_once()
+
+
+def test_ocr_pages_batch_call_count(tmp_path):
+    """ocr_pages must make exactly one batch reader.ocr() call for multiple uncached pages."""
+    import auditor.parsers.ocr_reader as mod
+    from unittest.mock import MagicMock, patch
+
+    fake_reader = MagicMock()
+    # Batch result: two pages
+    fake_reader.ocr.return_value = [
+        [[None, ("頁一", 0.9)]],
+        [[None, ("頁二", 0.8)]],
+    ]
+
+    fake_pix = MagicMock()
+    fake_pix.tobytes.return_value = _make_png_bytes()
+    fake_page = MagicMock()
+    fake_page.get_pixmap.return_value = fake_pix
+
+    fake_doc = MagicMock()
+    fake_doc.__len__ = lambda self: 10
+    fake_doc.__getitem__ = lambda self, i: fake_page
+    fake_doc.close = MagicMock()
+
+    with patch.object(mod, "_FITZ_OK", True), \
+         patch.object(mod, "_paddle_reader", fake_reader), \
+         patch.object(mod, "_OCR_AVAILABLE", True), \
+         patch.object(mod, "_file_hash", return_value=None), \
+         patch.object(mod._fitz, "open", return_value=fake_doc):
+        result = mod.ocr_pages("fake.pdf", [0, 1])
+
+    assert fake_reader.ocr.call_count == 1, "Batch must use exactly one reader.ocr() call"
+    assert "頁一" in result.get(0, "")
+    assert "頁二" in result.get(1, "")
+
+
+def _make_png_bytes() -> bytes:
+    """Return minimal valid PNG bytes (1x1 white pixel) for mocking."""
+    from PIL import Image
+    import io
+    img = Image.new("RGB", (1, 1), color=(255, 255, 255))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+# ── deskew (Item 3) ──────────────────────────────────────────────────────────
+
+def test_deskew_handles_no_lines():
+    """_deskew must return the original image when no lines are detected."""
+    import numpy as np
+    from auditor.parsers.ocr_reader import _deskew
+
+    gray = np.zeros((100, 100), dtype=np.uint8)  # blank image → no edges → no lines
+    result = _deskew(gray)
+    assert result.shape == gray.shape
+
+
+def test_deskew_skips_large_angles():
+    """_deskew must return the original image when detected skew > 15°."""
+    import numpy as np
+    import cv2
+    from auditor.parsers.ocr_reader import _deskew
+
+    # Create an image with diagonal lines at ~30° to trigger the guard
+    gray = np.zeros((200, 200), dtype=np.uint8)
+    for i in range(200):
+        j = int(i * np.tan(np.radians(30)))
+        if 0 <= j < 200:
+            gray[i, j] = 255
+
+    original_sum = gray.sum()
+    result = _deskew(gray)
+    # Since angle > 15°, result should be the original (unchanged)
+    assert result.sum() == original_sum
+
+
+def test_deskew_corrects_slight_rotation():
+    """_deskew must reduce the skew angle for slightly tilted horizontal lines."""
+    import numpy as np
+    import cv2
+    from auditor.parsers.ocr_reader import _deskew
+
+    # Create an image with horizontal lines then rotate it by 5°
+    gray = np.zeros((300, 400), dtype=np.uint8)
+    for y in [75, 150, 225]:
+        gray[y, 50:350] = 255  # horizontal white lines
+
+    angle_deg = 5.0
+    M = cv2.getRotationMatrix2D((200, 150), angle_deg, 1.0)
+    rotated = cv2.warpAffine(gray, M, (400, 300), borderMode=cv2.BORDER_REPLICATE)
+
+    corrected = _deskew(rotated)
+
+    # Measure line angles in corrected image — they should be closer to 0 than in rotated
+    edges_rot = cv2.Canny(rotated, 50, 150, apertureSize=3)
+    edges_cor = cv2.Canny(corrected, 50, 150, apertureSize=3)
+
+    def _median_angle(edges: np.ndarray) -> float:
+        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=30, minLineLength=30, maxLineGap=5)
+        if lines is None:
+            return 0.0
+        angles = []
+        for ln in lines:
+            x1, y1, x2, y2 = ln[0]
+            if x2 != x1:
+                a = np.degrees(np.arctan2(y2 - y1, x2 - x1))
+                if abs(a) < 45:
+                    angles.append(a)
+        return float(np.median(angles)) if angles else 0.0
+
+    angle_before = abs(_median_angle(edges_rot))
+    angle_after = abs(_median_angle(edges_cor))
+    assert angle_after < angle_before, (
+        f"Deskew did not reduce skew: before={angle_before:.2f}°, after={angle_after:.2f}°"
+    )
+
+
+# ── Sauvola binarization (Item 4) ────────────────────────────────────────────
+
+def test_binarize_produces_binary_image():
+    """Output of _binarize must contain only pixel values 0 and 255."""
+    import numpy as np
+    from auditor.parsers.ocr_reader import _binarize
+
+    rng = np.random.default_rng(42)
+    gray = rng.integers(0, 256, (100, 100), dtype=np.uint8)
+    result = _binarize(gray)
+
+    unique = set(result.flatten().tolist())
+    assert unique <= {0, 255}, f"Non-binary values found: {unique - {0, 255}}"
+
+
+def test_binarize_fallback_when_skimage_unavailable(monkeypatch):
+    """_binarize must fall back to adaptive threshold if scikit-image is absent."""
+    import sys
+    import numpy as np
+    from unittest.mock import patch
+
+    # Remove skimage from sys.modules to simulate unavailability
+    with patch.dict(sys.modules, {"skimage": None, "skimage.filters": None}):
+        import importlib
+        import auditor.parsers.ocr_reader as mod
+        importlib.reload(mod)
+
+        rng = np.random.default_rng(0)
+        gray = rng.integers(0, 256, (64, 64), dtype=np.uint8)
+        result = mod._binarize(gray)
+
+    # Must still produce a valid binary image
+    unique = set(result.flatten().tolist())
+    assert unique <= {0, 255}
+
+
+def test_binarize_sauvola_preferred_when_available():
+    """When scikit-image is importable, _binarize must use Sauvola (not adaptive)."""
+    import numpy as np
+    from unittest.mock import patch, MagicMock
+    import auditor.parsers.ocr_reader as mod
+
+    mock_sauvola = MagicMock(return_value=np.zeros((10, 10)))
+    with patch.dict("sys.modules", {"skimage": MagicMock(), "skimage.filters": MagicMock(threshold_sauvola=mock_sauvola)}):
+        import importlib
+        importlib.reload(mod)
+        gray = np.zeros((10, 10), dtype=np.uint8)
+        mod._binarize(gray)
+
+    mock_sauvola.assert_called_once()
+
+
+# ── confidence filtering (Item 2) ─────────────────────────────────────────────
+
+def test_ocr_min_confidence_constant_exists():
+    from auditor.parsers.ocr_reader import _OCR_MIN_CONFIDENCE
+    assert 0.0 < _OCR_MIN_CONFIDENCE < 1.0
+
+
+def test_parse_paddle_result_skips_none_detection():
+    """None entries in the detection list must be skipped gracefully."""
+    from auditor.parsers.ocr_reader import _parse_paddle_result
+    detections = [None, [None, ("valid", 0.9)], None]
+    assert _parse_paddle_result(detections) == "valid"
+
+
+# ── cache version key (Item 7) ────────────────────────────────────────────────
+
+def test_cache_schema_includes_preprocess_version(tmp_path):
+    """The SQLite cache table must have a preprocess_version column."""
+    import sqlite3
+    import auditor.parsers.ocr_reader as mod
+    from unittest.mock import patch
+
+    db_path = tmp_path / "ocr_cache.db"
+    with patch.object(mod, "_CACHE_DB", db_path), \
+         patch.object(mod, "_CACHE_DIR", tmp_path):
+        conn = mod._get_cache_conn()
+        assert conn is not None
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(ocr_cache)")}
+        assert "preprocess_version" in cols
+        conn.close()
+
+
+def test_cache_get_uses_preprocess_version(tmp_path):
+    """_cache_get must not return entries from a different preprocess_version."""
+    import sqlite3
+    import auditor.parsers.ocr_reader as mod
+    from unittest.mock import patch
+
+    db_path = tmp_path / "ocr_cache.db"
+    with patch.object(mod, "_CACHE_DB", db_path), \
+         patch.object(mod, "_CACHE_DIR", tmp_path):
+        conn = mod._get_cache_conn()
+        # Write with version 1 directly
+        conn.execute(
+            "INSERT INTO ocr_cache (file_hash, page_idx, zoom, preprocess_version, text)"
+            " VALUES (?,?,?,?,?)",
+            ("abc", 0, 2.0, 1, "old-text"),
+        )
+        conn.commit()
+        # _cache_get with current _PREPROCESS_VERSION must not return old entry
+        result = mod._cache_get(conn, "abc", 0, 2.0)
+        assert result is None
+        conn.close()
+
+
+def test_cache_put_uses_preprocess_version(tmp_path):
+    """_cache_put must store the current _PREPROCESS_VERSION."""
+    import auditor.parsers.ocr_reader as mod
+    from unittest.mock import patch
+
+    db_path = tmp_path / "ocr_cache.db"
+    with patch.object(mod, "_CACHE_DB", db_path), \
+         patch.object(mod, "_CACHE_DIR", tmp_path):
+        conn = mod._get_cache_conn()
+        mod._cache_put(conn, "abc", 0, 2.0, "hello")
+        row = conn.execute(
+            "SELECT preprocess_version FROM ocr_cache WHERE file_hash=? AND page_idx=? AND zoom=?",
+            ("abc", 0, 2.0),
+        ).fetchone()
+        assert row is not None
+        assert row[0] == mod._PREPROCESS_VERSION
+        conn.close()
+
+
+def test_cache_migration_drops_old_schema(tmp_path):
+    """If the existing table is missing preprocess_version, it must be recreated."""
+    import sqlite3
+    import auditor.parsers.ocr_reader as mod
+    from unittest.mock import patch
+
+    db_path = tmp_path / "ocr_cache.db"
+    # Create old-schema table
+    old_conn = sqlite3.connect(str(db_path))
+    old_conn.execute(
+        "CREATE TABLE ocr_cache"
+        " (file_hash TEXT, page_idx INTEGER, zoom REAL, text TEXT,"
+        "  PRIMARY KEY (file_hash, page_idx, zoom))"
+    )
+    old_conn.execute("INSERT INTO ocr_cache VALUES ('x', 0, 2.0, 'old')")
+    old_conn.commit()
+    old_conn.close()
+
+    with patch.object(mod, "_CACHE_DB", db_path), \
+         patch.object(mod, "_CACHE_DIR", tmp_path):
+        conn = mod._get_cache_conn()
+        assert conn is not None
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(ocr_cache)")}
+        assert "preprocess_version" in cols
+        # Old data should be gone
+        count = conn.execute("SELECT COUNT(*) FROM ocr_cache").fetchone()[0]
+        assert count == 0
+        conn.close()
