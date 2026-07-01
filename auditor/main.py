@@ -169,7 +169,25 @@ def _run_ai_pipeline(
         chunks = chunk_markdown(combined_md)
 
         try:
+            from .parsing_pipeline.evidence_grounder import ground_quote
+        except ImportError:
+            ground_quote = None
+
+        try:
             for f in audit_chunks(chunks, wiki_rules):
+                evidence_text: Optional[str] = None
+                evidence_verified = False
+                if ground_quote is not None:
+                    # Critical findings escalate to the Citations API for an
+                    # authoritative quote; warnings use the cheap offline check.
+                    ev = ground_quote(
+                        f.detected_text,
+                        combined_md,
+                        claim=f.reason,
+                        use_citations_api=(f.severity == "critical"),
+                    )
+                    evidence_text = ev.cited_text
+                    evidence_verified = ev.verified
                 ai_findings.append(AiFinding(
                     source="llm",
                     rule_id=f.rule_id,
@@ -178,6 +196,8 @@ def _run_ai_pipeline(
                     detected_text=f.detected_text,
                     reason=f.reason,
                     page_number=f.page_number,
+                    evidence_text=evidence_text,
+                    evidence_verified=evidence_verified,
                 ))
         except Exception as exc:
             log.error("LLM audit error: %s", exc)
