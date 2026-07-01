@@ -206,9 +206,9 @@ LLM-dependent tests mock `anthropic` via `sys.modules` patching + `importlib.rel
 
 ## Pending Work
 
-1. **Wire AI pipeline into `/audit`** — Track B modules exist but are not called from `main.py`.
+1. ~~**Wire AI pipeline into `/audit`**~~ — ✅ Done. `_run_ai_pipeline()` in `main.py` runs llm_auditor + field_auditor + cross_doc_comparator (when a secondary PDF is present) and surfaces results as `AiFinding` (source ∈ `llm`/`field`/`cross`).
 2. **`ANTHROPIC_API_KEY` in `.env`** — required for Phase 4 live runs.
 3. **Merge `fix/high-issues-from-review` into `main`.**
-4. **Regulation version switching in `field_auditor`** — currently hardcodes 111-year rules; should read document version before applying rules.
+4. ~~**Regulation version switching in `field_auditor`**~~ — ✅ Done. `main.py` derives `reg_year` from the selected `RegulationVersion` (via `_reg_year_from_version()`) and passes it to `extract_and_validate()`; thresholds for 107/108/111/113 live in `field_auditor._CONSENT_THRESHOLDS`.
 5. **Docker prebake Docling models** — first cold start downloads ~300 MB layout model; bake into image at build time.
-6. **`verify_critical` path tests** — `audit_chunks(verify_critical=True)` has no test coverage yet.
+6. **`verify_critical` path tests** — covered in `tests/test_parsing_pipeline.py` (keeps/drops/skips-warning/exception/false-path).
