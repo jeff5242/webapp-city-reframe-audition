@@ -421,6 +421,15 @@ def _run_audit_sync(
             secondary_pdf=str(re_path) if re_path else None,
         )
 
+        # Composite confidence scoring — corroborate Track B findings against
+        # the Track A rule engine and route low-confidence ones to human review.
+        if ai_findings:
+            try:
+                from .parsing_pipeline.confidence_scorer import score_findings
+                ai_findings = score_findings(ai_findings, findings)
+            except Exception as exc:
+                log.error("Confidence scoring error: %s", exc)
+
         # PDF annotation
         _set_task_progress(task_id, "running", "標注 PDF 中…")
         annotated_key: Optional[str] = None

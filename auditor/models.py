@@ -112,6 +112,10 @@ class AiFinding:
     # verification or the Anthropic Citations API).
     evidence_text: Optional[str] = None
     evidence_verified: bool = False
+    # Confidence scoring (Phase 6): composite confidence in [0,1] and whether
+    # the finding should be routed to a human reviewer.
+    confidence: float = 1.0
+    needs_human_review: bool = False
 
 
 @dataclass

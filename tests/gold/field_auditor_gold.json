@@ -1,0 +1,127 @@
+{
+  "description": "Gold set for field_auditor.validate_fields — deterministic regulatory checks. Each case lists the extracted fields and the rule_ids a correct auditor must produce.",
+  "cases": [
+    {
+      "id": "bonus_over_cap_111",
+      "description": "容積獎勵合計 45% 超過 40% 上限",
+      "reg_year": "111",
+      "fields": {
+        "bonus_total_pct": 45.0,
+        "consent_ratio": {"owner_count_pct": 90.0, "land_area_pct": 90.0, "source_page": 5},
+        "application_date": "2025-05-06",
+        "affidavit_date": "2025-05-06",
+        "power_of_attorney_date": "2025-05-06"
+      },
+      "expected_rule_ids": ["LAW-FAR-001"]
+    },
+    {
+      "id": "bonus_within_cap_111",
+      "description": "容積獎勵合計 38% 未超標，且其他欄位皆合規",
+      "reg_year": "111",
+      "fields": {
+        "bonus_total_pct": 38.0,
+        "consent_ratio": {"owner_count_pct": 90.0, "land_area_pct": 90.0, "source_page": 5},
+        "application_date": "2025-05-06",
+        "affidavit_date": "2025-05-06",
+        "power_of_attorney_date": "2025-05-06"
+      },
+      "expected_rule_ids": []
+    },
+    {
+      "id": "bonus_from_items_over_cap",
+      "description": "無合計欄位，但各項加總 42% 超標（推算）",
+      "reg_year": "111",
+      "fields": {
+        "bonus_items": [
+          {"name": "都市計畫獎勵", "rate_pct": 20.0, "legal_basis": "第65條"},
+          {"name": "協助拆遷獎勵", "rate_pct": 22.0, "legal_basis": "第65條"}
+        ]
+      },
+      "expected_rule_ids": ["LAW-FAR-001"]
+    },
+    {
+      "id": "consent_owner_below_111",
+      "description": "111年：土地所有權人同意 60% 未達 2/3",
+      "reg_year": "111",
+      "fields": {
+        "consent_ratio": {"owner_count_pct": 60.0, "land_area_pct": 90.0, "source_page": 7}
+      },
+      "expected_rule_ids": ["LAW-CON-001"]
+    },
+    {
+      "id": "consent_area_below_111",
+      "description": "111年：土地面積同意 70% 未達 3/4",
+      "reg_year": "111",
+      "fields": {
+        "consent_ratio": {"owner_count_pct": 90.0, "land_area_pct": 70.0, "source_page": 7}
+      },
+      "expected_rule_ids": ["LAW-CON-002"]
+    },
+    {
+      "id": "consent_ok_111_fails_113",
+      "description": "同意 70%/78% 在 111 年合規，但 113 年（門檻 80%）雙雙不足",
+      "reg_year": "113",
+      "fields": {
+        "consent_ratio": {"owner_count_pct": 70.0, "land_area_pct": 78.0, "source_page": 7}
+      },
+      "expected_rule_ids": ["LAW-CON-001", "LAW-CON-002"]
+    },
+    {
+      "id": "consent_ok_111_year",
+      "description": "同意 70%/78% 在 111 年合規，無違規",
+      "reg_year": "111",
+      "fields": {
+        "consent_ratio": {"owner_count_pct": 70.0, "land_area_pct": 78.0, "source_page": 7}
+      },
+      "expected_rule_ids": []
+    },
+    {
+      "id": "date_mismatch",
+      "description": "三份文件報核日期不一致",
+      "reg_year": "111",
+      "fields": {
+        "application_date": "2025-05-06",
+        "affidavit_date": "2025-05-06",
+        "power_of_attorney_date": "2025-04-30"
+      },
+      "expected_rule_ids": ["CONS-DATE-001"]
+    },
+    {
+      "id": "date_consistent",
+      "description": "三份文件報核日期一致，無違規",
+      "reg_year": "111",
+      "fields": {
+        "application_date": "2025-05-06",
+        "affidavit_date": "2025-05-06",
+        "power_of_attorney_date": "2025-05-06"
+      },
+      "expected_rule_ids": []
+    },
+    {
+      "id": "multiple_violations",
+      "description": "同時容積超標 + 同意不足 + 日期不一致",
+      "reg_year": "111",
+      "fields": {
+        "bonus_total_pct": 50.0,
+        "consent_ratio": {"owner_count_pct": 50.0, "land_area_pct": 60.0, "source_page": 3},
+        "application_date": "2025-05-06",
+        "affidavit_date": "2025-05-01",
+        "power_of_attorney_date": "2025-05-06"
+      },
+      "expected_rule_ids": ["LAW-FAR-001", "LAW-CON-001", "LAW-CON-002", "CONS-DATE-001"]
+    },
+    {
+      "id": "all_clean",
+      "description": "完全合規案件，不應產生任何 finding",
+      "reg_year": "111",
+      "fields": {
+        "bonus_total_pct": 30.0,
+        "consent_ratio": {"owner_count_pct": 85.0, "land_area_pct": 85.0, "source_page": 4},
+        "application_date": "2025-05-06",
+        "affidavit_date": "2025-05-06",
+        "power_of_attorney_date": "2025-05-06"
+      },
+      "expected_rule_ids": []
+    }
+  ]
+}
