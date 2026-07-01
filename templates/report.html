@@ -186,9 +186,19 @@
               <span class="font-medium text-sm text-gray-800">{{ f.field_name }}</span>
               {% set source_label = {'llm': '語意分析', 'field': '欄位驗證', 'cross': '跨文件比對'}.get(f.source, f.source) %}
               <span class="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{{ source_label }}</span>
+              {% if f.source == 'llm' %}
+                {% if f.evidence_verified %}
+                <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full" title="引用原文已在文件中核對">✓ 原文已核對</span>
+                {% else %}
+                <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full" title="無法在文件中核對引用原文，請人工確認">⚠ 原文待確認</span>
+                {% endif %}
+              {% endif %}
             </div>
             {% if f.detected_text %}
             <p class="text-sm text-gray-700 mt-1">📍 {{ f.detected_text }}</p>
+            {% endif %}
+            {% if f.evidence_verified and f.evidence_text and f.evidence_text != f.detected_text %}
+            <p class="text-xs text-green-700 mt-1 pl-3 border-l-2 border-green-300">「{{ f.evidence_text }}」</p>
             {% endif %}
             <p class="text-xs text-gray-500 mt-1">{{ f.reason }}</p>
             {% if f.page_number %}

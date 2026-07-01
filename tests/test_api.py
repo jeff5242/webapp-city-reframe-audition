@@ -294,6 +294,38 @@ def test_run_ai_pipeline_runs_cross_doc_when_secondary_present(monkeypatch):
     assert "1200.0 m²" in cross[0].detected_text
 
 
+def test_run_ai_pipeline_grounds_llm_findings(monkeypatch):
+    """LLM findings must carry evidence_verified reflecting the source check."""
+    from unittest.mock import patch, MagicMock
+    import auditor.main as main_mod
+    from auditor.parsing_pipeline.llm_auditor import LlmFinding
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    finding = LlmFinding(
+        rule_id="LAW-001",
+        error_type="regulatory_violation",
+        severity="warning",
+        detected_text="容積獎勵合計45%",
+        suggested_text="",
+        reason="超過上限",
+        page_number=3,
+    )
+
+    with patch.object(main_mod, "_pdf_to_markdown",
+                      return_value="本案容積獎勵合計45%，超過上限。"), \
+         patch("auditor.parsing_pipeline.chunker.chunk_markdown", return_value=["chunk"]), \
+         patch("auditor.parsing_pipeline.llm_auditor.audit_chunks", return_value=[finding]), \
+         patch("auditor.parsing_pipeline.field_auditor.extract_and_validate",
+               return_value=(MagicMock(), [])):
+        findings = main_mod._run_ai_pipeline("primary.pdf", reg_year="111")
+
+    llm = [f for f in findings if f.source == "llm"]
+    assert len(llm) == 1
+    assert llm[0].evidence_verified is True
+    assert llm[0].evidence_text == "容積獎勵合計45%"
+
+
 def test_run_ai_pipeline_skips_cross_doc_when_no_secondary(monkeypatch):
     """compare_documents must NOT run when secondary_pdf is None."""
     from unittest.mock import patch, MagicMock
