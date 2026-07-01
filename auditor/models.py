@@ -100,11 +100,11 @@ class AuditData:
 @dataclass(frozen=True)
 class AiFinding:
     """Unified AI-generated finding from Track B pipeline."""
-    source: Literal["llm", "field"]
+    source: Literal["llm", "field", "cross"]
     rule_id: str
     severity: Literal["critical", "warning"]
-    field_name: str       # error_type (llm) or field_name (field auditor)
-    detected_text: str    # detected_text or actual_value
+    field_name: str       # error_type (llm), field_name (field), or field_name (cross-doc)
+    detected_text: str    # detected_text, actual_value, or "計畫書 A vs B" summary
     reason: str
     page_number: int = 0
 

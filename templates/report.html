@@ -184,7 +184,8 @@
             <div class="flex items-center gap-2 mb-1">
               <span class="text-xs font-mono {{ badge }} px-2 py-0.5 rounded-full">{{ f.rule_id }}</span>
               <span class="font-medium text-sm text-gray-800">{{ f.field_name }}</span>
-              <span class="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{{ f.source }}</span>
+              {% set source_label = {'llm': '語意分析', 'field': '欄位驗證', 'cross': '跨文件比對'}.get(f.source, f.source) %}
+              <span class="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{{ source_label }}</span>
             </div>
             {% if f.detected_text %}
             <p class="text-sm text-gray-700 mt-1">📍 {{ f.detected_text }}</p>
