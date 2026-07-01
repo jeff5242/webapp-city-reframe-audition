@@ -193,6 +193,14 @@
                 <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full" title="無法在文件中核對引用原文，請人工確認">⚠ 原文待確認</span>
                 {% endif %}
               {% endif %}
+              {% set conf_pct = (f.confidence * 100) | round | int %}
+              {% if f.confidence >= 0.75 %}{% set conf_cls = 'bg-green-100 text-green-700' %}
+              {% elif f.confidence >= 0.6 %}{% set conf_cls = 'bg-yellow-100 text-yellow-700' %}
+              {% else %}{% set conf_cls = 'bg-red-100 text-red-700' %}{% endif %}
+              <span class="text-xs {{ conf_cls }} px-2 py-0.5 rounded-full" title="複合信心分數">信心 {{ conf_pct }}%</span>
+              {% if f.needs_human_review %}
+              <span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium" title="信心不足或為 critical 未核對，建議人工複核">🔍 需人工複核</span>
+              {% endif %}
             </div>
             {% if f.detected_text %}
             <p class="text-sm text-gray-700 mt-1">📍 {{ f.detected_text }}</p>
