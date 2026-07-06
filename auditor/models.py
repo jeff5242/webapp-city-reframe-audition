@@ -89,6 +89,10 @@ class Finding:
     message: str
     evidence: Optional[str] = None
     reference: Optional[str] = None
+    # 計算三段式（副總回饋 #1：不能只說「錯了」，要秀怎麼算）
+    applied_value: Optional[str] = None    # ① 申請書填報值
+    expected_calc: Optional[str] = None    # ② 依法規應為值（含計算式）
+    computed_result: Optional[str] = None  # ③ 系統核算結果
 
 
 @dataclass(frozen=True)

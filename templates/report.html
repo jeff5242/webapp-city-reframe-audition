@@ -154,6 +154,29 @@
               {% endif %}
             </div>
             <p class="text-sm text-gray-700 ml-7">{{ finding.message }}</p>
+            {# 計算三段式（副總 #1）：申請填報 → 依法規應為 → 系統核算 #}
+            {% if finding.applied_value or finding.expected_calc or finding.computed_result %}
+            <div class="ml-7 mt-2 rounded-lg border border-gray-200 overflow-hidden text-sm">
+              {% if finding.applied_value %}
+              <div class="flex bg-white">
+                <div class="w-24 shrink-0 bg-gray-50 text-gray-500 px-3 py-1.5 text-xs">申請書填報</div>
+                <div class="px-3 py-1.5 text-gray-800">{{ finding.applied_value }}</div>
+              </div>
+              {% endif %}
+              {% if finding.expected_calc %}
+              <div class="flex border-t border-gray-100">
+                <div class="w-24 shrink-0 bg-gray-50 text-gray-500 px-3 py-1.5 text-xs">依法規應為</div>
+                <div class="px-3 py-1.5 text-gray-800">{{ finding.expected_calc }}</div>
+              </div>
+              {% endif %}
+              {% if finding.computed_result %}
+              <div class="flex border-t border-gray-100">
+                <div class="w-24 shrink-0 bg-blue-50 text-blue-700 px-3 py-1.5 text-xs font-medium">系統核算</div>
+                <div class="px-3 py-1.5 font-medium {% if finding.status == 'fail' %}text-red-600{% else %}text-green-700{% endif %}">{{ finding.computed_result }}</div>
+              </div>
+              {% endif %}
+            </div>
+            {% endif %}
             {% if finding.evidence %}
             <p class="text-xs text-gray-500 ml-7 mt-1">📍 {{ finding.evidence }}</p>
             {% endif %}

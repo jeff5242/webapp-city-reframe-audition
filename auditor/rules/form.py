@@ -64,23 +64,34 @@ class BonusFloorAreaLimitRule(Rule):
                 evidence=f"審議資料表第 {rt.raw_page} 頁",
             )
 
+        # 容積獎勵比率 = 獎勵樓地板 ÷ 基準容積（非 ÷ 上限）。
+        # 基準缺漏時依「上限 = 基準 × 50%」推回 基準 = 上限 × 2。
+        base = rt.base_floor_area or (rt.bonus_limit * 2)
+        evidence = f"審議資料表第 {rt.raw_page} 頁"
+        applied = f"獎勵樓地板面積 {rt.bonus_floor_area:,.2f} m²"
+        expected = (
+            f"基準容積 {base:,.2f} × 50% = 上限 {rt.bonus_limit:,.2f} m²"
+            "（都更條例第65條）"
+        )
+        ratio = rt.bonus_floor_area / base * 100 if base > 0 else 0
+
         if rt.bonus_floor_area > rt.bonus_limit + 0.1:
             diff = rt.bonus_floor_area - rt.bonus_limit
-            # 容積獎勵比率 = 獎勵樓地板 ÷ 基準容積（非 ÷ 上限）。
-            # 基準缺漏時依「上限 = 基準 × 50%」推回 基準 = 上限 × 2。
-            base = rt.base_floor_area or (rt.bonus_limit * 2 if rt.bonus_limit else None)
-            ratio_txt = ""
-            if base and base > 0:
-                ratio_txt = f"，獎勵比率 {rt.bonus_floor_area / base * 100:.1f}%"
             return self._fail(
                 f"申請額 {rt.bonus_floor_area:,.2f}m² 超過上限 {rt.bonus_limit:,.2f}m²"
-                f"，差距 {diff:,.2f}m²{ratio_txt}",
-                evidence=f"審議資料表第 {rt.raw_page} 頁",
+                f"，差距 {diff:,.2f}m²，獎勵比率 {ratio:.1f}%",
+                evidence=evidence,
+                applied_value=applied,
+                expected_calc=expected,
+                computed_result=f"超出上限 {diff:,.2f} m²，獎勵比率 {ratio:.1f}% ＞ 50%",
             )
 
         return self._pass(
             f"容積獎勵 {rt.bonus_floor_area:,.2f}m² ≤ 上限 {rt.bonus_limit:,.2f}m²",
-            evidence=f"審議資料表第 {rt.raw_page} 頁",
+            evidence=evidence,
+            applied_value=applied,
+            expected_calc=expected,
+            computed_result=f"未超上限，獎勵比率 {ratio:.1f}% ≤ 50%",
         )
 
 
