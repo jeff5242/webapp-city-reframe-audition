@@ -114,17 +114,28 @@ class AccessibleParkingRule(Rule):
 
         legal = rt.legal_parking
         accessible = rt.accessible_parking
+        evidence = f"審議資料表第 {rt.raw_page} 頁"
 
         if legal is not None and legal > 0:
             required = _required_accessible(legal)
+            applied = f"無障礙停車位 {accessible} 輛"
+            expected = (
+                f"法定停車 {legal} 輛 → 依建築技術規則§167-6 應設 {required} 輛"
+            )
             if accessible < required:
                 return self._fail(
                     f"法定停車位 {legal} 輛，依建築技術規則應設 {required} 輛無障礙停車位，"
                     f"但填寫為 {accessible} 輛",
-                    evidence=f"審議資料表第 {rt.raw_page} 頁",
+                    evidence=evidence,
+                    applied_value=applied,
+                    expected_calc=expected,
+                    computed_result=f"短少 {required - accessible} 輛（{accessible} ＜ {required}）",
                 )
             return self._pass(
                 f"無障礙停車位 {accessible} 輛 ≥ 法定要求 {required} 輛（法定停車 {legal} 輛）",
+                applied_value=applied,
+                expected_calc=expected,
+                computed_result=f"符合（{accessible} ≥ {required}）",
                 evidence=f"審議資料表第 {rt.raw_page} 頁",
             )
 

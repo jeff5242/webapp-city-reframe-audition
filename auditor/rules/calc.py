@@ -21,16 +21,27 @@ class ActualParkingRule(Rule):
         if rt.actual_parking is None or rt.legal_parking is None:
             return self._warn("實設或法定停車位資料不足，建議人工確認")
 
+        evidence = f"審議資料表第 {rt.raw_page} 頁"
+        applied = f"實設汽車停車位 {rt.actual_parking} 輛"
+        expected = f"法定汽車停車位 {rt.legal_parking} 輛（建築技術規則第59條）"
+
         if rt.actual_parking < rt.legal_parking:
+            short = rt.legal_parking - rt.actual_parking
             return self._fail(
                 f"實設停車位 {rt.actual_parking} 輛低於法定要求 {rt.legal_parking} 輛，"
-                f"差距 {rt.legal_parking - rt.actual_parking} 輛",
-                evidence=f"審議資料表第 {rt.raw_page} 頁",
+                f"差距 {short} 輛",
+                evidence=evidence,
+                applied_value=applied,
+                expected_calc=expected,
+                computed_result=f"短少 {short} 輛（{rt.actual_parking} ＜ {rt.legal_parking}）",
             )
 
         return self._pass(
             f"實設 {rt.actual_parking} 輛 ≥ 法定 {rt.legal_parking} 輛",
-            evidence=f"審議資料表第 {rt.raw_page} 頁",
+            evidence=evidence,
+            applied_value=applied,
+            expected_calc=expected,
+            computed_result=f"符合（{rt.actual_parking} ≥ {rt.legal_parking}）",
         )
 
 
@@ -53,15 +64,25 @@ class BonusLimitVerifyRule(Rule):
         expected = rt.base_floor_area * _BONUS_LIMIT_RATIO
         diff = abs(rt.bonus_limit - expected)
 
+        evidence = f"審議資料表第 {rt.raw_page} 頁"
+        applied = f"容積獎勵上限（填報）{rt.bonus_limit:,.2f} m²"
+        expected_txt = f"基準容積 {rt.base_floor_area:,.2f} × 50% = {expected:,.2f} m²（都更條例第65條）"
+
         if diff > _BONUS_LIMIT_TOLERANCE:
             return self._fail(
                 f"容積獎勵上限 {rt.bonus_limit:,.2f}m² 與計算值 {expected:,.2f}m² "
                 f"（基準 {rt.base_floor_area:,.2f}m² × 50%）差距 {diff:.2f}m²，超過允許誤差",
-                evidence=f"審議資料表第 {rt.raw_page} 頁",
+                evidence=evidence,
+                applied_value=applied,
+                expected_calc=expected_txt,
+                computed_result=f"與計算值差距 {diff:,.2f} m²，超過允許誤差 {_BONUS_LIMIT_TOLERANCE} m²",
             )
 
         return self._pass(
             f"容積獎勵上限 {rt.bonus_limit:,.2f}m² 與計算值一致"
             f"（{rt.base_floor_area:,.2f}m² × 50% = {expected:,.2f}m²）",
-            evidence=f"審議資料表第 {rt.raw_page} 頁",
+            evidence=evidence,
+            applied_value=applied,
+            expected_calc=expected_txt,
+            computed_result=f"與計算值一致（差 {diff:,.2f} m² ≤ 允許誤差 {_BONUS_LIMIT_TOLERANCE} m²）",
         )
