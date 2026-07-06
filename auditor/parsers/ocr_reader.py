@@ -17,9 +17,10 @@ renders PDF pages to numpy arrays while the main thread OCRs each page as it
 arrives, overlapping rendering I/O with inference. (PaddleOCR must be called
 per full-page image with detection enabled; list input forces det=False.)
 
-Quality: _preprocess_for_ocr() applies CLAHE contrast enhancement + fast
-denoising + adaptive binarization before passing to PaddleOCR.  Only
-detections with confidence >= _OCR_MIN_CONFIDENCE are included in the output.
+Quality: raw pixels are fed to PaddleOCR at zoom=3.0. Aggressive preprocessing
+(binarization/deskew) was measured to HURT digit recognition on dense scanned
+tables (3→8 misreads), so it is disabled — see _preprocess_for_ocr(). Only
+detections with confidence >= _OCR_MIN_CONFIDENCE are kept.
 """
 from __future__ import annotations
 
@@ -44,7 +45,7 @@ _HASH_BYTES = 64 * 1024  # first 64 KB for fast, stable identification
 
 # Bump this constant whenever the preprocessing pipeline changes so old cache
 # entries are never returned for a different algorithm.
-_PREPROCESS_VERSION = 2
+_PREPROCESS_VERSION = 3  # bumped: raw pixels + zoom 3.0 (was preproc + zoom 2.0)
 
 # Confidence threshold — PaddleOCR detections below this score are dropped.
 _OCR_MIN_CONFIDENCE = 0.5
@@ -184,32 +185,17 @@ def _deskew(gray: "np.ndarray") -> "np.ndarray":  # type: ignore[name-defined]
 
 
 def _preprocess_for_ocr(img_array: "np.ndarray") -> "np.ndarray":  # type: ignore[name-defined]
-    """Enhance image quality before OCR: deskew → CLAHE → denoise → binarize.
+    """Return the image unchanged — feed raw pixels to PaddleOCR.
 
-    Fixes common scanned-document issues: slight page rotation, uneven
-    lighting, scanner noise, and low contrast that cause PaddleOCR to
-    produce garbled Traditional Chinese.
-    Falls back to original array if OpenCV is unavailable.
+    Measured on a real dense 審議資料表 (合家歡): aggressive preprocessing
+    (deskew → CLAHE → denoise → Sauvola binarize) HURT digit recognition badly
+    — binarization merges thin strokes so 3 reads as 8, poisoning dates/文號 and
+    the regulation-year selection. Raw pixels at zoom=3.0 gave the best result
+    (correct 「113」 ×8, zero 「118」 misreads) vs the worst with preprocessing
+    (「113」 ×1, 「118」 ×6). PaddleOCR's own detector handles contrast/skew, so
+    we pass raw pixels. The _deskew/_binarize helpers are kept for opt-in use.
     """
-    try:
-        import cv2
-
-        if img_array.ndim == 3 and img_array.shape[2] == 4:
-            gray = cv2.cvtColor(img_array, cv2.COLOR_RGBA2GRAY)
-        elif img_array.ndim == 3:
-            gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-        else:
-            gray = img_array.copy()
-
-        gray = _deskew(gray)
-
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        enhanced = clahe.apply(gray)
-        denoised = cv2.fastNlMeansDenoising(enhanced, h=10, templateWindowSize=7, searchWindowSize=21)
-        binary = _binarize(denoised)
-        return cv2.cvtColor(binary, cv2.COLOR_GRAY2RGB)
-    except Exception:
-        return img_array
+    return img_array
 
 
 def _binarize(gray: "np.ndarray") -> "np.ndarray":  # type: ignore[name-defined]
@@ -292,7 +278,7 @@ def ocr_available() -> bool:
     return _FITZ_OK and (_OCR_AVAILABLE is not False)
 
 
-def ocr_page(pdf_path: str, page_index: int, zoom: float = 2.0) -> str:
+def ocr_page(pdf_path: str, page_index: int, zoom: float = 3.0) -> str:
     """Run OCR on a single PDF page and return extracted text.
 
     Checks the SQLite cache first; on a miss, runs PaddleOCR and stores the
@@ -351,7 +337,7 @@ def ocr_page(pdf_path: str, page_index: int, zoom: float = 2.0) -> str:
         return ""
 
 
-def ocr_pages(pdf_path: str, page_indices: list[int], zoom: float = 2.0) -> dict[int, str]:
+def ocr_pages(pdf_path: str, page_indices: list[int], zoom: float = 3.0) -> dict[int, str]:
     """OCR multiple pages at once, reusing the same reader.
 
     Checks the SQLite cache for each page individually; only runs PaddleOCR for
