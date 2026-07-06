@@ -127,6 +127,29 @@
     <div class="px-6 py-4 border-b border-gray-100">
       <h2 class="font-semibold text-gray-700">審查結果明細</h2>
     </div>
+    {# 分級圖例（副總 #4）：白話定義每一級 + 審核者「下一步該做什麼」。
+       必檢＝一定要看/一定要改；建議提醒＝系統請人工確認，非實施者違規。 #}
+    <div class="px-6 py-3 bg-gray-50 border-b border-gray-100">
+      <p class="text-xs font-medium text-gray-500 mb-2">分級說明（本系統自訂，供快速判讀）</p>
+      <div class="grid sm:grid-cols-2 gap-2 text-xs">
+        <div class="flex items-start gap-2">
+          <span class="shrink-0 bg-red-600 text-white px-2 py-0.5 rounded-full">必檢 · 應修正</span>
+          <span class="text-gray-600">不符法規（嚴重）→ <span class="font-medium text-gray-700">實施者須修正後再送</span></span>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="shrink-0 bg-orange-500 text-white px-2 py-0.5 rounded-full">必檢 · 應修正</span>
+          <span class="text-gray-600">不符法規（重要）→ <span class="font-medium text-gray-700">實施者須修正後再送</span></span>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="shrink-0 bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">建議提醒 · 待人工核對</span>
+          <span class="text-gray-600">系統資料不足/需判讀 → <span class="font-medium text-gray-700">承辦人工確認（非違規）</span></span>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="shrink-0 bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✅ 通過</span>
+          <span class="text-gray-600">符合規定 → <span class="font-medium text-gray-700">無需處理</span></span>
+        </div>
+      </div>
+    </div>
     <div class="divide-y divide-gray-100">
       {% for finding in sorted_findings %}
       {% set status_config = {
@@ -143,19 +166,55 @@
               <span class="text-lg">{{ cfg.icon }}</span>
               <span class="font-medium text-gray-800">{{ finding.rule_name }}</span>
               <span class="text-xs font-mono {{ cfg.badge }} px-2 py-0.5 rounded-full">{{ finding.rule_id }}</span>
-              {# 標籤反映「應採取的動作」而非規則嚴重度：只有真正不通過(fail)才是
-                 實施者應修正；warn 多為系統資料不足，屬承辦人工核對，非客戶違規。 #}
+              {# 標籤反映「應採取的動作」而非規則嚴重度（副總 #4 白話分級）：
+                 必檢＝不符法規，實施者一定要改；建議提醒＝系統請人工核對，非客戶違規。 #}
               {% if finding.status == 'fail' and finding.severity == 'critical' %}
-              <span class="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full" title="不符法規，實施者應修正">必修 · 應修正</span>
+              <span class="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full" title="不符法規（嚴重），實施者須修正後再送">必檢 · 應修正</span>
               {% elif finding.status == 'fail' and finding.severity == 'high' %}
-              <span class="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full" title="重要問題，實施者應修正">重要 · 應修正</span>
+              <span class="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full" title="不符法規（重要），實施者須修正後再送">必檢 · 應修正</span>
               {% elif finding.status == 'warn' %}
-              <span class="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full" title="系統資料不足或需確認，由承辦人工核對，非實施者違規">待人工核對</span>
+              <span class="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full" title="系統資料不足或需判讀，由承辦人工核對，非實施者違規">建議提醒 · 待人工核對</span>
               {% endif %}
             </div>
             <p class="text-sm text-gray-700 ml-7">{{ finding.message }}</p>
+            {# 計算三段式（副總 #1）：申請填報 → 依法規應為 → 系統核算 #}
+            {% if finding.applied_value or finding.expected_calc or finding.computed_result %}
+            <div class="ml-7 mt-2 rounded-lg border border-gray-200 overflow-hidden text-sm">
+              {% if finding.applied_value %}
+              <div class="flex bg-white">
+                <div class="w-24 shrink-0 bg-gray-50 text-gray-500 px-3 py-1.5 text-xs">申請書填報</div>
+                <div class="px-3 py-1.5 text-gray-800">{{ finding.applied_value }}</div>
+              </div>
+              {% endif %}
+              {% if finding.expected_calc %}
+              <div class="flex border-t border-gray-100">
+                <div class="w-24 shrink-0 bg-gray-50 text-gray-500 px-3 py-1.5 text-xs">依法規應為</div>
+                <div class="px-3 py-1.5 text-gray-800">{{ finding.expected_calc }}</div>
+              </div>
+              {% endif %}
+              {% if finding.computed_result %}
+              <div class="flex border-t border-gray-100">
+                <div class="w-24 shrink-0 bg-blue-50 text-blue-700 px-3 py-1.5 text-xs font-medium">系統核算</div>
+                <div class="px-3 py-1.5 font-medium {% if finding.status == 'fail' %}text-red-600{% else %}text-green-700{% endif %}">{{ finding.computed_result }}</div>
+              </div>
+              {% endif %}
+            </div>
+            {% endif %}
             {% if finding.evidence %}
-            <p class="text-xs text-gray-500 ml-7 mt-1">📍 {{ finding.evidence }}</p>
+            {# 頁碼跳轉（副總 #5 highlight 定位）：抽出 evidence 中的頁碼，
+               連到標註 PDF 的該頁（#page=N），審核者一鍵直達問題位置。 #}
+            {% set ev_page = finding.evidence | evidence_page %}
+            <p class="text-xs text-gray-500 ml-7 mt-1 flex items-center gap-2 flex-wrap">
+              <span>📍 {{ finding.evidence }}</span>
+              {% if ev_page and report.annotated_pdf_key %}
+              <a
+                href="/download/{{ report.annotated_pdf_key }}#page={{ ev_page }}"
+                target="_blank" rel="noopener"
+                class="no-print inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium transition-colors"
+                title="開啟標註 PDF 並跳至第 {{ ev_page }} 頁"
+              >🔍 看標註第 {{ ev_page }} 頁</a>
+              {% endif %}
+            </p>
             {% endif %}
             {% if finding.reference %}
             <p class="text-xs text-gray-400 ml-7 mt-0.5">法源：{{ finding.reference }}</p>

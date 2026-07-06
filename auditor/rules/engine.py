@@ -16,7 +16,14 @@ class Rule(ABC):
     def evaluate(self, data: AuditData) -> Finding:
         ...
 
-    def _pass(self, message: str, evidence: str = "") -> Finding:
+    def _pass(
+        self,
+        message: str,
+        evidence: str = "",
+        applied_value: str = None,
+        expected_calc: str = None,
+        computed_result: str = None,
+    ) -> Finding:
         return Finding(
             rule_id=self.rule_id,
             rule_name=self.rule_name,
@@ -25,9 +32,19 @@ class Rule(ABC):
             message=message,
             evidence=evidence or None,
             reference=self.reference or None,
+            applied_value=applied_value,
+            expected_calc=expected_calc,
+            computed_result=computed_result,
         )
 
-    def _fail(self, message: str, evidence: str = "") -> Finding:
+    def _fail(
+        self,
+        message: str,
+        evidence: str = "",
+        applied_value: str = None,
+        expected_calc: str = None,
+        computed_result: str = None,
+    ) -> Finding:
         return Finding(
             rule_id=self.rule_id,
             rule_name=self.rule_name,
@@ -36,6 +53,9 @@ class Rule(ABC):
             message=message,
             evidence=evidence or None,
             reference=self.reference or None,
+            applied_value=applied_value,
+            expected_calc=expected_calc,
+            computed_result=computed_result,
         )
 
     def _warn(self, message: str, evidence: str = "") -> Finding:
