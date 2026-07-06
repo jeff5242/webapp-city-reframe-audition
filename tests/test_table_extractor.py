@@ -178,6 +178,33 @@ def test_extract_via_vision_sends_image_block(monkeypatch):
 
 # ── orchestration ─────────────────────────────────────────────────────────────
 
+def test_ppstructure_disabled_by_default(monkeypatch):
+    """PP-Structure must return {} unless ENABLE_PPSTRUCTURE is set."""
+    monkeypatch.delenv("ENABLE_PPSTRUCTURE", raising=False)
+    assert te._extract_via_ppstructure("x.pdf", 10) == {}
+
+
+def test_ppstructure_gate_reads_env(monkeypatch):
+    monkeypatch.setenv("ENABLE_PPSTRUCTURE", "1")
+    assert te._ppstructure_enabled() is True
+    monkeypatch.setenv("ENABLE_PPSTRUCTURE", "0")
+    assert te._ppstructure_enabled() is False
+
+
+def test_merge_fills_report_filing_date_from_vision():
+    """Vision-extracted 報核日 must merge into ReviewTableData (item 1 on scans)."""
+    base = _base(report_filing_date=None)
+    merged = te._merge_into(base, {"report_filing_date": "112年9月8日"})
+    assert merged.report_filing_date == "112年9月8日"
+
+
+def test_vision_parse_keeps_report_filing_date():
+    parsed = te._parse_vision_fields(
+        {"report_filing_date": "112年9月8日", "bonus_limit": None, "base_floor_area": 1000.0}
+    )
+    assert parsed == {"report_filing_date": "112年9月8日", "base_floor_area": 1000.0}
+
+
 def test_enhance_returns_base_when_no_page():
     base = _base(raw_page=None)
     assert te.enhance_review_table("x.pdf", base) is base

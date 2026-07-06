@@ -87,6 +87,37 @@ def test_filing_date_none_when_absent():
     assert _extract_filing_date_from_process("沒有任何日期的文字") is None
 
 
+def test_find_review_table_by_scoring_when_ocr_garbles_title(tmp_path):
+    """審議資料表 must still be found when OCR garbles its title and 填表日期.
+
+    Reproduces 合家歡: title unmatched, 填表日期→填表耳期, but characteristic
+    fields (基準容積/獎勵樓地板/報核/送審) survive → scoring detection finds it.
+    """
+    import auditor.extractors.review_table as mod
+    from unittest.mock import patch
+
+    garbled_table = (
+        "填表耳期: 113年4月30日\n送審類別\n辦理過程\n"
+        "基準容積 1000\n獎勵樓地板面示 520\n權利變換計畫報核 112.09.08\n"
+    )
+    other_page = "申請獎勵容積面積 原建築基地基準容積之30% 報核版"
+
+    fake_pages = [
+        {"page_num": 1, "text": "", "tables": [], "_image_page": True},
+        {"page_num": 2, "text": "", "tables": [], "_image_page": True},
+    ]
+
+    with patch.object(mod, "get_pdf_metadata", return_value={"total_pages": 2}), \
+         patch.object(mod, "extract_pages_text", return_value=fake_pages), \
+         patch("auditor.parsers.ocr_reader.ocr_available", return_value=True), \
+         patch("auditor.parsers.ocr_reader.ocr_pages",
+               return_value={0: other_page, 1: garbled_table}):
+        page_num, text = mod._find_review_table_page("fake.pdf")
+
+    assert page_num == 2, "scoring must pick the real 審議資料表 page, not the 獎勵計算頁"
+    assert "報核" in text
+
+
 def test_review_table_data_carries_filing_date():
     """ReviewTableData 應帶 report_filing_date 欄位（預設 None）。"""
     from auditor.models import ReviewTableData
@@ -268,16 +299,20 @@ def test_ocr_page_uses_paddle_reader(tmp_path):
     fake_reader.ocr.assert_called_once()
 
 
-def test_ocr_pages_batch_call_count(tmp_path):
-    """ocr_pages must make exactly one batch reader.ocr() call for multiple uncached pages."""
+def test_ocr_pages_per_page_call(tmp_path):
+    """ocr_pages must call reader.ocr() once per page with a single-image input.
+
+    PaddleOCR rejects list input with detection enabled ("When input a list of
+    images, det must be false"), so pages are OCR'd individually — one call each.
+    """
     import auditor.parsers.ocr_reader as mod
     from unittest.mock import MagicMock, patch
 
     fake_reader = MagicMock()
-    # Batch result: two pages
-    fake_reader.ocr.return_value = [
-        [[None, ("頁一", 0.9)]],
-        [[None, ("頁二", 0.8)]],
+    # Each per-page call returns a single-image result: [page_result]
+    fake_reader.ocr.side_effect = [
+        [[[None, ("頁一", 0.9)]]],
+        [[[None, ("頁二", 0.8)]]],
     ]
 
     fake_pix = MagicMock()
@@ -297,7 +332,10 @@ def test_ocr_pages_batch_call_count(tmp_path):
          patch.object(mod._fitz, "open", return_value=fake_doc):
         result = mod.ocr_pages("fake.pdf", [0, 1])
 
-    assert fake_reader.ocr.call_count == 1, "Batch must use exactly one reader.ocr() call"
+    assert fake_reader.ocr.call_count == 2, "Each page must be a separate reader.ocr() call"
+    # every call must pass a single image (ndarray), never a list
+    for call in fake_reader.ocr.call_args_list:
+        assert not isinstance(call.args[0], list), "must not pass a list to reader.ocr()"
     assert "頁一" in result.get(0, "")
     assert "頁二" in result.get(1, "")
 

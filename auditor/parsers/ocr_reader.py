@@ -13,8 +13,9 @@ OCR results are cached in a SQLite database at
 page_index, zoom, preprocess_version).  A cache hit skips PaddleOCR entirely.
 
 Speed: ocr_pages() uses a producer-consumer pipeline — a background thread
-renders all PDF pages to numpy arrays while the main thread collects them;
-once all images are ready a single batch OCR call processes them all.
+renders PDF pages to numpy arrays while the main thread OCRs each page as it
+arrives, overlapping rendering I/O with inference. (PaddleOCR must be called
+per full-page image with detection enabled; list input forces det=False.)
 
 Quality: _preprocess_for_ocr() applies CLAHE contrast enhancement + fast
 denoising + adaptive binarization before passing to PaddleOCR.  Only
@@ -356,9 +357,10 @@ def ocr_pages(pdf_path: str, page_indices: list[int], zoom: float = 2.0) -> dict
     Checks the SQLite cache for each page individually; only runs PaddleOCR for
     pages not already cached.  Cache failures are silently ignored.
 
-    Uses a producer-consumer pipeline: a background thread renders all PDF pages
-    to numpy arrays; once rendering completes, all images are processed in a
-    single batch OCR call to minimise model overhead.
+    Uses a producer-consumer pipeline: a background thread renders PDF pages to
+    numpy arrays while the main thread OCRs each page as it arrives, overlapping
+    rendering I/O with inference. Each page is OCR'd with a separate detection
+    pass (PaddleOCR rejects list input with detection enabled).
 
     Returns a dict mapping 0-based page index → extracted text.
     """
@@ -414,31 +416,25 @@ def ocr_pages(pdf_path: str, page_indices: list[int], zoom: float = 2.0) -> dict
         renderer = threading.Thread(target=_render_worker, daemon=True)
         renderer.start()
 
-        # Collect rendered images while renderer works
-        rendered: list[tuple[int, "np.ndarray"]] = []
+        # Consume rendered pages as they arrive and OCR each one individually.
+        # PaddleOCR's .ocr() must run per full-page image with detection enabled
+        # (passing a list forces det=False, which treats inputs as pre-cropped
+        # regions — wrong for whole pages). Per-page calls overlap with rendering.
         while True:
             item = render_q.get()
             if item is None:
                 break
             idx, img_array = item
-            if img_array is not None:
-                rendered.append((idx, _preprocess_for_ocr(img_array)))
-        renderer.join()
-
-        if not rendered:
-            return results
-
-        # Batch OCR: single call for all accumulated images
-        images = [r[1] for r in rendered]
-        with _INFER_LOCK:
-            batch_result = reader.ocr(images, cls=True)
-
-        for i, (idx, _) in enumerate(rendered):
-            page_result = batch_result[i] if batch_result and i < len(batch_result) else None
-            text = _parse_paddle_result(page_result)
+            if img_array is None:
+                continue
+            preprocessed = _preprocess_for_ocr(img_array)
+            with _INFER_LOCK:
+                result = reader.ocr(preprocessed, cls=True)
+            text = _parse_paddle_result(result[0] if result else None)
             results[idx] = text
             if conn and fhash:
                 _cache_put(conn, fhash, idx, zoom, text)
+        renderer.join()
 
         return results
 
