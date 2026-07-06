@@ -87,6 +87,33 @@ def test_filing_date_none_when_absent():
     assert _extract_filing_date_from_process("沒有任何日期的文字") is None
 
 
+def test_filing_date_from_docnum():
+    """報核文號編碼日期（合家歡實案）：字第11311140047號 → 113年11月14日。"""
+    from auditor.extractors.review_table import _extract_filing_date_from_process
+    text = "1申請都市更新事業及權變計畫\n東湖一更新會字第11311140047號\n"
+    assert _extract_filing_date_from_process(text) == "113年11月14日"
+
+
+def test_filing_date_docnum_beats_earlier_baohe():
+    """文號報核日(113/11/14) 應勝過較早的報核日(112/09/08)。"""
+    from auditor.extractors.review_table import _extract_filing_date_from_process
+    text = (
+        "申請權利變換計畫報核 112.09.08\n"
+        "補正報核 東湖一更新會字第11311140047號\n"
+    )
+    assert _extract_filing_date_from_process(text) == "113年11月14日"
+
+
+def test_filing_date_excludes_public_exhibition_context():
+    """公開展覽日期即使較新也不算報核日。"""
+    from auditor.extractors.review_table import _extract_filing_date_from_process
+    text = (
+        "申請權利變換計畫報核 112.09.08\n"
+        "權利變換計畫公開展覽 113.07.26\n"
+    )
+    assert _extract_filing_date_from_process(text) == "112年9月8日"
+
+
 def test_find_review_table_by_scoring_when_ocr_garbles_title(tmp_path):
     """審議資料表 must still be found when OCR garbles its title and 填表日期.
 

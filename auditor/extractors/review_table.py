@@ -40,28 +40,51 @@ def _parse_int(raw: str) -> Optional[int]:
 # 辦理過程中「報核」列的日期：dot 格式 (112.09.08) 或 ROC 格式 (112年9月8日)
 _PROCESS_DOT_DATE_RE = re.compile(r'(\d{3})\.(\d{1,2})\.(\d{1,2})')
 _PROCESS_ROC_DATE_RE = re.compile(r'(\d{3})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日')
+# 報核文號編碼日期：字第 YYYMMDDnnnn 號 (如 11311140047 → 113/11/14)。
+# OCR 對數字辨識較穩，文號是報核日最可靠的來源之一。
+_PROCESS_DOCNUM_DATE_RE = re.compile(r'字\s*第\s*(\d{3})(\d{2})(\d{2})\d{2,}\s*號')
+
+# 只計「報核」情境的日期，排除純浮水印「報核版」與公開展覽等其他階段
+_NON_FILING_CONTEXT = ("公開展覽", "公聽會", "核定", "審議會", "幹事會")
+
+
+def _valid_roc(y: int, mo: int, d: int) -> bool:
+    return 100 <= y <= 130 and 1 <= mo <= 12 and 1 <= d <= 31
 
 
 def _extract_filing_date_from_process(text: str) -> Optional[str]:
     """從審議資料表「辦理過程」抽取「報核」日期，回傳最新一筆。
 
-    辦理過程常有多筆報核（事業計畫報核、權利變換計畫報核），取日期最新者
-    作為本次審議的報核日。掃描含「報核」的每一行內的日期（dot 或 ROC 格式）。
-    回傳 ROC 字串如 "112年9月8日"，找不到回傳 None。
+    OCR 常把表格的標籤與數值拆到不同行，故採「就近」判讀：
+    - 文號編碼日期（字第 YYYMMDD…號）：最可靠，一律採計。
+    - 含「報核」的行 ± 相鄰行的 dot/ROC 日期：採計，但排除純「報核版」浮水印
+      與公開展覽/核定/審議會等非報核階段。
+    多筆取最新者（本次審議之報核日）。找不到回傳 None。
     """
     candidates: list[tuple[str, str]] = []  # (iso_for_sort, roc_display)
-    for line in text.splitlines():
-        if "報核" not in line:
-            continue
-        for regex in (_PROCESS_DOT_DATE_RE, _PROCESS_ROC_DATE_RE):
-            for m in regex.finditer(line):
-                y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
-                if 100 <= y <= 130 and 1 <= mo <= 12 and 1 <= d <= 31:
-                    iso = f"{y:03d}{mo:02d}{d:02d}"
-                    candidates.append((iso, f"{y}年{mo}月{d}日"))
+
+    def add(y: int, mo: int, d: int) -> None:
+        if _valid_roc(y, mo, d):
+            candidates.append((f"{y:03d}{mo:02d}{d:02d}", f"{y}年{mo}月{d}日"))
+
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        # ① 文號編碼日期 — 最可靠，任何行都採計
+        for m in _PROCESS_DOCNUM_DATE_RE.finditer(line):
+            add(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
+        # ② 就近的 dot/ROC 日期：本行或上一行提到「報核」，且非其他階段
+        context = (lines[i - 1] if i > 0 else "") + line
+        if "報核" in context and not any(k in context for k in _NON_FILING_CONTEXT):
+            # 純浮水印「報核版」（無其他報核字樣）不算
+            if context.strip() in ("報核版", "報核"):
+                continue
+            for regex in (_PROCESS_DOT_DATE_RE, _PROCESS_ROC_DATE_RE):
+                for m in regex.finditer(line):
+                    add(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
     if not candidates:
         return None
-    # 取最新（iso 字串可直接比較大小）
     return max(candidates, key=lambda c: c[0])[1]
 
 
