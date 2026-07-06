@@ -125,7 +125,7 @@ The next sprint task is wiring Track B into the `/audit` endpoint.
    - `storage/history.py` — SQLite-based audit history (case name → previous findings)
    - `s3.py` — presigned upload/download URLs, annotated PDF persistence, AES-256 SSE
 
-6. **Version selector** (`auditor/version_selector.py`) — maps 報核日期 (from 申請書/切結書/委託書) to the correct regulation year (107/108/111/113). Falls back to 填表日期 from 審議資料表 if 報核日期 is absent.
+6. **Version selector** (`auditor/version_selector.py`) — maps 報核日期 to the correct regulation year (107/108/111/113). 報核日期 priority (per 理事長 2026-07): ① 審議資料表「辦理過程」報核日 (`ReviewTableData.report_filing_date`, latest 報核 row) → ② 申請書/切結書/委託書 report date → ③ 審議資料表 填表日期 → ④ filename date. First-time applications without a 審議資料表 fall through to ②.
 
 ---
 
