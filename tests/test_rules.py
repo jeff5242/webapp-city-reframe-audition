@@ -171,6 +171,29 @@ class TestBonusFloorAreaLimitRule:
         finding = BonusFloorAreaLimitRule().evaluate(data)
         assert finding.status == "warn"
 
+    def test_ratio_is_bonus_over_base_not_over_limit(self):
+        """容積獎勵比率 = 獎勵 ÷ 基準容積（理事長 item 4）。
+
+        獎勵 1,020 / 基準 2,000 = 51.0%（非 獎勵/上限 1,000 = 102.0%）。
+        """
+        finding = BonusFloorAreaLimitRule().evaluate(
+            _make_data(bonus_floor_area=1020.0, bonus_limit=1000.0, base_floor_area=2000.0)
+        )
+        assert finding.status == "fail"
+        assert "51.0%" in finding.message
+        assert "102.0%" not in finding.message
+
+    def test_ratio_derives_base_from_limit_when_base_missing(self):
+        """基準缺漏時，依 上限=基準×50% 推回 基準=上限×2。
+
+        獎勵 1,020 / (上限 1,000 × 2) = 51.0%。
+        """
+        finding = BonusFloorAreaLimitRule().evaluate(
+            _make_data(bonus_floor_area=1020.0, bonus_limit=1000.0, base_floor_area=None)
+        )
+        assert finding.status == "fail"
+        assert "51.0%" in finding.message
+
 
 class TestAccessibleParkingRule:
     def test_pass_when_accessible_meets_threshold(self):

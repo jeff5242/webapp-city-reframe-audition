@@ -27,6 +27,34 @@ def _parse_int(raw: str) -> Optional[int]:
     return int(digits) if digits else None
 
 
+# 辦理過程中「報核」列的日期：dot 格式 (112.09.08) 或 ROC 格式 (112年9月8日)
+_PROCESS_DOT_DATE_RE = re.compile(r'(\d{3})\.(\d{1,2})\.(\d{1,2})')
+_PROCESS_ROC_DATE_RE = re.compile(r'(\d{3})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日')
+
+
+def _extract_filing_date_from_process(text: str) -> Optional[str]:
+    """從審議資料表「辦理過程」抽取「報核」日期，回傳最新一筆。
+
+    辦理過程常有多筆報核（事業計畫報核、權利變換計畫報核），取日期最新者
+    作為本次審議的報核日。掃描含「報核」的每一行內的日期（dot 或 ROC 格式）。
+    回傳 ROC 字串如 "112年9月8日"，找不到回傳 None。
+    """
+    candidates: list[tuple[str, str]] = []  # (iso_for_sort, roc_display)
+    for line in text.splitlines():
+        if "報核" not in line:
+            continue
+        for regex in (_PROCESS_DOT_DATE_RE, _PROCESS_ROC_DATE_RE):
+            for m in regex.finditer(line):
+                y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                if 100 <= y <= 130 and 1 <= mo <= 12 and 1 <= d <= 31:
+                    iso = f"{y:03d}{mo:02d}{d:02d}"
+                    candidates.append((iso, f"{y}年{mo}月{d}日"))
+    if not candidates:
+        return None
+    # 取最新（iso 字串可直接比較大小）
+    return max(candidates, key=lambda c: c[0])[1]
+
+
 def _find_submission_type(text: str) -> Optional[str]:
     for t in _SUBMISSION_TYPES:
         idx = text.find(t)
@@ -124,6 +152,9 @@ def _parse_from_text(text: str, page_num: int) -> ReviewTableData:
         r'填表日期[：:\s]*(?:中華民國\s*)?(\d+\s*年\s*\d+\s*月\s*\d+\s*日)', text
     )
 
+    # 報核日：辦理過程「報核」列的最新日期（優先於申請書作為版本選擇依據）
+    report_filing_date = _extract_filing_date_from_process(text)
+
     implementer = _search(
         r'實施者[：:\s]*([^\n\r\t　]{4,40}(?:股份有限公司|有限公司|更新會|協會|開發))',
         text,
@@ -217,4 +248,5 @@ def _parse_from_text(text: str, page_num: int) -> ReviewTableData:
         ev_parking=ev_parking,
         owner_consent_ratio=owner_consent_ratio,
         raw_page=page_num,
+        report_filing_date=report_filing_date,
     )

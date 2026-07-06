@@ -19,8 +19,10 @@ _DOC_PATTERNS = {
     "審議資料表": ["臺北市都市更新審議資料表", "都市更新審議資料表"],
 }
 
-# Detect TOC/index pages to avoid mis-classifying them as content pages
-_TOC_MARKERS = ["目 錄", "目錄", "............"]
+# Detect TOC/index pages to avoid mis-classifying them as content pages.
+# Includes 目次/頁次 variants so a differently-formatted index is still caught
+# (fixes: 搜尋申請書卻比對到目錄頁).
+_TOC_MARKERS = ["目 錄", "目錄", "目 次", "目次", "頁次", "............", "………"]
 
 _POA_PURPOSES = [
     # More specific categories first to avoid over-matching
@@ -37,17 +39,28 @@ _POA_PURPOSES = [
 _DATE_SOURCE_PRIORITY = ["申請書", "切結書", "委託書"]
 
 
-# Secondary markers required to distinguish a real 委託書 content page from a
-# TOC entry like "委託書.......3".  At least one must appear in the page text.
+# Secondary markers required to distinguish a real content page from a bare TOC
+# entry like "委託書.......3" / "申請書......I". At least one must appear.
 _POA_CONTENT_MARKERS = ["委託人", "受託", "茲委託", "委託事項"]
+# Real 申請書 pages carry applicant/filing details a TOC listing never has.
+_APPLICATION_CONTENT_MARKERS = [
+    "申請人", "茲申請", "實施者", "統一編號", "申請日期", "報核", "此致", "代表人",
+]
+
+# doc_type → content markers that gate a match (avoids matching TOC listings)
+_CONTENT_MARKER_GATES = {
+    "委託書": _POA_CONTENT_MARKERS,
+    "申請書": _APPLICATION_CONTENT_MARKERS,
+}
 
 
 def _match_doc_type(text: str) -> Optional[str]:
     for doc_type, patterns in _DOC_PATTERNS.items():
         if any(p in text for p in patterns):
-            if doc_type == "委託書" and not any(m in text for m in _POA_CONTENT_MARKERS):
-                # Keyword matched but none of the content markers are present —
-                # this is most likely a TOC reference, not a real 委託書 page.
+            gate = _CONTENT_MARKER_GATES.get(doc_type)
+            if gate is not None and not any(m in text for m in gate):
+                # Keyword matched but no content markers — most likely a TOC
+                # reference, not a real content page. Skip.
                 continue
             return doc_type
     return None

@@ -66,10 +66,15 @@ class BonusFloorAreaLimitRule(Rule):
 
         if rt.bonus_floor_area > rt.bonus_limit + 0.1:
             diff = rt.bonus_floor_area - rt.bonus_limit
-            ratio = rt.bonus_floor_area / rt.bonus_limit * 100 if rt.bonus_limit else 0
+            # 容積獎勵比率 = 獎勵樓地板 ÷ 基準容積（非 ÷ 上限）。
+            # 基準缺漏時依「上限 = 基準 × 50%」推回 基準 = 上限 × 2。
+            base = rt.base_floor_area or (rt.bonus_limit * 2 if rt.bonus_limit else None)
+            ratio_txt = ""
+            if base and base > 0:
+                ratio_txt = f"，獎勵比率 {rt.bonus_floor_area / base * 100:.1f}%"
             return self._fail(
                 f"申請額 {rt.bonus_floor_area:,.2f}m² 超過上限 {rt.bonus_limit:,.2f}m²"
-                f"，差距 {diff:,.2f}m²（{ratio:.1f}%）",
+                f"，差距 {diff:,.2f}m²{ratio_txt}",
                 evidence=f"審議資料表第 {rt.raw_page} 頁",
             )
 

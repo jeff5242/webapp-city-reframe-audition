@@ -369,11 +369,21 @@ def _run_audit_sync(
         )
         findings = _engine.evaluate(audit_data)
 
-        # Version selection
+        # Version selection — 報核日期優先序（理事長指示 2026-07）：
+        # ① 審議資料表「辦理過程」報核日 ② 申請書/切結書/委託書報核日
+        # ③ 審議資料表填表日期 ④ 檔名日期。第一次申請無審議資料表時，落到 ②。
+        review_filing_date = (
+            review_table.report_filing_date if review_table else None
+        )
         report_date_roc = front_docs.report_date if front_docs and front_docs.report_date else None
         fill_date_fallback = review_table.fill_date if review_table else None
         filename_date_fallback = _date_from_filename(bp_fname)
-        version_date = report_date_roc or fill_date_fallback or filename_date_fallback
+        version_date = (
+            review_filing_date
+            or report_date_roc
+            or fill_date_fallback
+            or filename_date_fallback
+        )
         reg_version, fill_date_iso = select_version(version_date)
 
         case_name = (
@@ -405,9 +415,15 @@ def _run_audit_sync(
         _submission_type = review_table.submission_type if review_table else None
         if _submission_type is None and re_s3_key:
             _submission_type = "B-1"
+        # 容積獎勵比率 = 獎勵樓地板 ÷ 基準容積（非 ÷ 上限；理事長指示 2026-07）。
+        # 基準容積缺漏時，依「上限 = 基準 × 50%」推回 基準 = 上限 × 2。
         _bonus_pct: Optional[float] = None
-        if review_table and review_table.bonus_floor_area and review_table.bonus_limit and review_table.bonus_limit > 0:
-            _bonus_pct = round(review_table.bonus_floor_area / review_table.bonus_limit * 100, 1)
+        if review_table and review_table.bonus_floor_area:
+            _base = review_table.base_floor_area
+            if not _base and review_table.bonus_limit:
+                _base = review_table.bonus_limit * 2
+            if _base and _base > 0:
+                _bonus_pct = round(review_table.bonus_floor_area / _base * 100, 1)
         _critical_count = sum(1 for f in findings if f.severity == "critical" and f.status == "fail")
         _high_count = sum(1 for f in findings if f.severity == "high" and f.status == "fail")
         _warn_count = sum(1 for f in findings if f.status == "warn")
@@ -478,7 +494,11 @@ def _run_audit_sync(
         if re_path:
             documents.append(re_fname or "權利變換計畫報告書.pdf")
 
-        if report_date_roc and front_docs:
+        # 來源標籤須與版本選擇的優先序一致
+        if review_filing_date:
+            rd_source = "審議資料表（辦理過程報核日）"
+            rd_page = review_table.raw_page if review_table else None
+        elif report_date_roc and front_docs:
             rd_source = front_docs.report_date_source
             rd_page = front_docs.report_date_page
         elif fill_date_fallback:

@@ -49,6 +49,9 @@ class ReviewTableData:
     ev_parking: Optional[int]
     owner_consent_ratio: Optional[float]
     raw_page: Optional[int]
+    # 報核日期：取自審議資料表「辦理過程」的「報核」列（最新一筆）。
+    # 版本選擇優先採用此日期，第一次申請無審議資料表時才退回申請書日期。
+    report_filing_date: Optional[str] = None
 
 
 @dataclass(frozen=True)

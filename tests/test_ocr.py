@@ -40,15 +40,71 @@ def test_ocr_pages_returns_empty_dict_when_fitz_unavailable():
 # ── front_docs pattern improvements ───────────────────────────────────────────
 
 def test_match_doc_type_combined_variant():
-    """Regression: '都市更新事業計畫及權利變換計畫申請書' must match '申請書'."""
+    """Real 申請書 content page (title + applicant details) must match '申請書'."""
     from auditor.extractors.front_docs import _match_doc_type
-    text = "都市更新事業計畫及權利變換計畫申請書 ............ I"
+    text = "都市更新事業計畫及權利變換計畫申請書\n申請人：某某更新會　統一編號 12345678"
     assert _match_doc_type(text) == "申請書"
 
 
 def test_match_doc_type_original_variant():
     from auditor.extractors.front_docs import _match_doc_type
-    assert _match_doc_type("都市更新事業計畫申請書") == "申請書"
+    assert _match_doc_type("都市更新事業計畫申請書\n茲申請都市更新事業計畫報核") == "申請書"
+
+
+def test_match_doc_type_bare_application_title_is_toc():
+    """Bare title with dotted leader (TOC entry) must NOT match — fixes 6/22 bug."""
+    from auditor.extractors.front_docs import _match_doc_type
+    assert _match_doc_type("都市更新事業計畫及權利變換計畫申請書 ............ I") is None
+
+
+# ── 審議資料表 辦理過程 報核日 (理事長 item 1) ────────────────────────────────
+
+def test_filing_date_dot_format_latest():
+    """辦理過程多筆報核，取最新一筆（dot 格式）。"""
+    from auditor.extractors.review_table import _extract_filing_date_from_process
+    text = (
+        "4  申請事業計畫報核  102.04.30  冠字第1020430017號\n"
+        "7  申請權利變換計畫報核  112.09.08  世座都更112字09001號\n"
+        "8  權利變換計畫公開展覽 113.01.15~113.02.15\n"
+    )
+    assert _extract_filing_date_from_process(text) == "112年9月8日"
+
+
+def test_filing_date_roc_format():
+    from auditor.extractors.review_table import _extract_filing_date_from_process
+    assert _extract_filing_date_from_process("申請事業計畫報核 112年9月8日") == "112年9月8日"
+
+
+def test_filing_date_ignores_non_baohe_lines():
+    """只看含『報核』的行；公開展覽日期不算報核日。"""
+    from auditor.extractors.review_table import _extract_filing_date_from_process
+    text = "更新單元公告 96.11.20\n權利變換計畫公開展覽 113.07.02~113.07.31\n"
+    assert _extract_filing_date_from_process(text) is None
+
+
+def test_filing_date_none_when_absent():
+    from auditor.extractors.review_table import _extract_filing_date_from_process
+    assert _extract_filing_date_from_process("沒有任何日期的文字") is None
+
+
+def test_review_table_data_carries_filing_date():
+    """ReviewTableData 應帶 report_filing_date 欄位（預設 None）。"""
+    from auditor.models import ReviewTableData
+    rt = ReviewTableData(
+        case_name=None, implementer=None, implementer_id=None, submission_type=None,
+        fill_date=None, land_area=None, base_floor_area=None, bonus_floor_area=None,
+        bonus_limit=None, legal_parking=None, actual_parking=None, accessible_parking=None,
+        ev_parking=None, owner_consent_ratio=None, raw_page=17,
+    )
+    assert rt.report_filing_date is None
+    rt2 = ReviewTableData(
+        case_name=None, implementer=None, implementer_id=None, submission_type=None,
+        fill_date=None, land_area=None, base_floor_area=None, bonus_floor_area=None,
+        bonus_limit=None, legal_parking=None, actual_parking=None, accessible_parking=None,
+        ev_parking=None, owner_consent_ratio=None, raw_page=17,
+        report_filing_date="112年9月8日",
+    )
+    assert rt2.report_filing_date == "112年9月8日"
 
 
 def test_match_doc_type_jiangjie_shu():
