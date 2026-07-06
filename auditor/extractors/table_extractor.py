@@ -150,11 +150,22 @@ def _map_structured_cells(cells: List[dict]) -> Dict[str, object]:
     return result
 
 
+# PP-Structure is disabled by default: the bundled PaddleOCR build is unreliable
+# on this stack (layout lang, tensor-dim, and zlib errors observed on real docs)
+# and only wastes time + logs noise before falling through to the vision path.
+# Set ENABLE_PPSTRUCTURE=1 to re-enable once a working build is validated.
+def _ppstructure_enabled() -> bool:
+    return os.getenv("ENABLE_PPSTRUCTURE", "").lower() in ("1", "true", "yes")
+
+
 def _extract_via_ppstructure(pdf_path: str, page_num: int) -> Dict[str, object]:
     """Best-effort on-prem structured extraction via PaddleOCR PP-Structure.
 
-    Returns {} when PP-Structure is unavailable or finds no table.
+    Disabled unless ENABLE_PPSTRUCTURE is set. Returns {} when disabled,
+    unavailable, or on any failure (degrades to the vision path).
     """
+    if not _ppstructure_enabled():
+        return {}
     try:
         from paddleocr import PPStructure  # type: ignore
     except Exception:
@@ -175,8 +186,11 @@ def _extract_via_ppstructure(pdf_path: str, page_num: int) -> Dict[str, object]:
         results = engine(img)
         cells = _ppstructure_to_cells(results)
         return _map_structured_cells(cells)
-    except Exception as exc:
-        log.warning("PP-Structure extraction failed: %s", exc)
+    except BaseException as exc:
+        # BaseException (not just Exception): PaddleOCR can call sys.exit() on
+        # unsupported config (e.g. layout lang), which raises SystemExit and
+        # would otherwise crash the whole /audit. Degrade to vision instead.
+        log.warning("PP-Structure extraction failed (non-fatal): %s", exc)
         return {}
 
 
@@ -186,7 +200,10 @@ _ppstructure_engine = None
 def _get_ppstructure(cls):
     global _ppstructure_engine
     if _ppstructure_engine is None:
-        _ppstructure_engine = cls(show_log=False, lang="chinese_cht")
+        # Layout models only support 'ch'/'en' (NOT 'chinese_cht'); 'ch' handles
+        # Chinese table structure. Cell-text quality is secondary — the grid is
+        # what we need, and vision fallback covers accuracy.
+        _ppstructure_engine = cls(show_log=False, lang="ch")
     return _ppstructure_engine
 
 
@@ -236,6 +253,13 @@ _VISION_TOOL = {
             "implementer": {"type": ["string", "null"], "description": "實施者名稱"},
             "submission_type": {"type": ["string", "null"], "description": "送審類別 (A-1/B-1/B-2/C/D)"},
             "fill_date": {"type": ["string", "null"], "description": "填表日期 (民國年月日)"},
+            "report_filing_date": {
+                "type": ["string", "null"],
+                "description": (
+                    "報核日期：辦理過程表中「申請事業計畫報核」或「申請權利變換計畫報核」"
+                    "那一列的日期，取最新一筆。格式為民國年月日 (如 112年9月8日)。"
+                ),
+            },
             "owner_consent_ratio": {"type": ["number", "null"], "description": "土地所有權人同意比率 (%)"},
         },
         "required": [],

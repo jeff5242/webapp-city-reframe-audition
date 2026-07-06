@@ -9,6 +9,16 @@ from ..parsers.pdf_reader import extract_page_text, extract_pages_text, get_pdf_
 _TABLE_KEYWORDS = ["臺北市都市更新審議資料表", "都市更新審議資料表"]
 # These markers only appear in the actual form, not in the TOC entry
 _FORM_CONTENT_MARKERS = ["填表日期", "送審類別", "檔名", "實施方式"]
+
+# OCR-robust partial markers for scoring-based detection when OCR garbles the
+# title / full field labels (e.g. 填表日期→填表耳期). Use prefixes that survive
+# common OCR errors. The 審議資料表 hits many of these; other pages (e.g. the
+# 獎勵容積計算頁) hit only a few.
+_ROBUST_TABLE_MARKERS = [
+    "填表", "送審", "辦理過程", "基準容積", "獎勵樓地板", "法定容積",
+    "停車位", "更新單元", "實施者", "容積獎勵", "報核",
+]
+_ROBUST_SCORE_THRESHOLD = 4
 _SUBMISSION_TYPES = ["B-1", "A-1", "B-2", "C", "D"]
 # Characters that indicate a checkbox is checked
 _CHECKED = set("■▪●✓√☑◆")
@@ -108,13 +118,27 @@ def _find_review_table_page(pdf_path: str) -> tuple[Optional[int], str]:
         return None, ""
 
     ocr_results = ocr_pages(pdf_path, image_page_indices)
-    for idx, raw in ocr_results.items():
-        text = unicodedata.normalize("NFKC", raw)
+    ocr_texts: dict[int, str] = {
+        idx: unicodedata.normalize("NFKC", raw) for idx, raw in ocr_results.items()
+    }
+
+    # Pass A — title keyword + at least one marker (works when OCR is clean)
+    for idx, text in ocr_texts.items():
         has_keyword = any(kw in text for kw in _TABLE_KEYWORDS)
-        # Relax to 1 marker for OCR (character recognition can miss some)
         matched_markers = [m for m in _FORM_CONTENT_MARKERS if m in text]
         if has_keyword and len(matched_markers) >= 1:
             return idx + 1, text  # 1-based page num
+
+    # Pass B — OCR often garbles the dense table's title and 「填表日期」
+    # (e.g. 填表日期→填表耳期). Fall back to scoring pages by OCR-robust
+    # characteristic fields and pick the best-scoring page above threshold.
+    best_idx, best_score = None, 0
+    for idx, text in ocr_texts.items():
+        score = sum(1 for m in _ROBUST_TABLE_MARKERS if m in text)
+        if score > best_score:
+            best_idx, best_score = idx, score
+    if best_idx is not None and best_score >= _ROBUST_SCORE_THRESHOLD:
+        return best_idx + 1, ocr_texts[best_idx]
 
     return None, ""
 
