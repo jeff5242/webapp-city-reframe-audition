@@ -143,10 +143,14 @@
               <span class="text-lg">{{ cfg.icon }}</span>
               <span class="font-medium text-gray-800">{{ finding.rule_name }}</span>
               <span class="text-xs font-mono {{ cfg.badge }} px-2 py-0.5 rounded-full">{{ finding.rule_id }}</span>
-              {% if finding.severity == 'critical' %}
-              <span class="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full">必修</span>
-              {% elif finding.severity == 'high' %}
-              <span class="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full">重要</span>
+              {# 標籤反映「應採取的動作」而非規則嚴重度：只有真正不通過(fail)才是
+                 實施者應修正；warn 多為系統資料不足，屬承辦人工核對，非客戶違規。 #}
+              {% if finding.status == 'fail' and finding.severity == 'critical' %}
+              <span class="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full" title="不符法規，實施者應修正">必修 · 應修正</span>
+              {% elif finding.status == 'fail' and finding.severity == 'high' %}
+              <span class="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full" title="重要問題，實施者應修正">重要 · 應修正</span>
+              {% elif finding.status == 'warn' %}
+              <span class="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full" title="系統資料不足或需確認，由承辦人工核對，非實施者違規">待人工核對</span>
               {% endif %}
             </div>
             <p class="text-sm text-gray-700 ml-7">{{ finding.message }}</p>
