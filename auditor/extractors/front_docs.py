@@ -195,7 +195,7 @@ def extract_front_docs(
         import unicodedata
         from ..parsers.ocr_reader import ocr_available, ocr_pages
         if ocr_available():
-            ocr_results = ocr_pages(pdf_path, image_page_indices, zoom=2.0)
+            ocr_results = ocr_pages(pdf_path, image_page_indices, zoom=3.0)
             for entry in pages:
                 idx = entry["page_num"] - 1
                 if idx in ocr_results and ocr_results[idx].strip():
