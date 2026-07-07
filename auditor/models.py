@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, Optional, Tuple, List, TYPE_CHECKING
+from typing import Dict, Literal, Optional, Tuple, List, TYPE_CHECKING
 
 
 @dataclass(frozen=True)
@@ -146,6 +146,8 @@ class AuditReport:
     prev_audit_time: Optional[str] = None
     # ③ PDF 標註下載 key
     annotated_pdf_key: Optional[str] = None
+    # ③b 問題頁標註截圖（page → base64 data-URI），內嵌報告供零點擊預覽
+    evidence_images: Dict[int, str] = field(default_factory=dict)
     # ④ Track B AI pipeline findings (empty when ANTHROPIC_API_KEY not set)
     ai_findings: List["AiFinding"] = field(default_factory=list)
     # ⑤ Peer comparison stats (None when fewer than 2 same-type cases exist)

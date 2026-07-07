@@ -23,7 +23,8 @@ def _rt(**overrides):
 
 
 def _report(findings, annotated_pdf_key=None, review_table=None,
-            report_date=None, report_date_source=None, report_date_page=None):
+            report_date=None, report_date_source=None, report_date_page=None,
+            evidence_images=None):
     return AuditReport(
         case_name="測試案",
         audit_time="2026-07-06 10:00",
@@ -35,6 +36,7 @@ def _report(findings, annotated_pdf_key=None, review_table=None,
         term_matches=[],
         findings=findings,
         annotated_pdf_key=annotated_pdf_key,
+        evidence_images=evidence_images or {},
         report_date=report_date,
         report_date_source=report_date_source,
         report_date_page=report_date_page,
@@ -81,6 +83,57 @@ def test_no_jump_link_without_annotated_key():
     assert "#page=11" not in html
     # evidence 文字仍應顯示
     assert "審議資料表第 11 頁" in html
+
+
+def test_download_button_forces_attachment_but_jump_link_inline():
+    f = Finding(
+        rule_id="CALC-001", rule_name="容積獎勵", status="fail", severity="critical",
+        message="超出上限", evidence="審議資料表第 11 頁",
+    )
+    html = generate_report(_report([f], annotated_pdf_key="abcd1234"))
+    # 下載按鈕強制 attachment
+    assert "/download/abcd1234?dl=1" in html
+    # 定位連結不帶 dl（走 inline，瀏覽器開新頁跳頁）
+    assert "/download/abcd1234#page=11" in html
+
+
+# ── 標註頁截圖內嵌（副總 UX highlight 定位）─────────────────────────────────
+
+def test_evidence_thumbnail_embedded_when_image_present():
+    f = Finding(
+        rule_id="CALC-001", rule_name="容積獎勵", status="fail", severity="critical",
+        message="超出上限", evidence="審議資料表第 11 頁",
+    )
+    html = generate_report(_report(
+        [f], annotated_pdf_key="abcd1234",
+        evidence_images={11: "data:image/jpeg;base64,Zm9v"},
+    ))
+    assert 'src="data:image/jpeg;base64,Zm9v"' in html
+    assert "第 11 頁標註預覽" in html
+
+
+def test_no_thumbnail_when_page_not_in_images():
+    f = Finding(
+        rule_id="CALC-001", rule_name="容積獎勵", status="fail", severity="critical",
+        message="超出上限", evidence="審議資料表第 11 頁",
+    )
+    html = generate_report(_report(
+        [f], annotated_pdf_key="abcd1234",
+        evidence_images={7: "data:image/jpeg;base64,Zm9v"},  # 不同頁
+    ))
+    assert "data:image/jpeg;base64,Zm9v" not in html
+    # 文字頁碼跳轉仍在
+    assert "看標註第 11 頁" in html
+
+
+def test_no_thumbnail_without_evidence_images():
+    f = Finding(
+        rule_id="CALC-001", rule_name="容積獎勵", status="fail", severity="critical",
+        message="超出上限", evidence="審議資料表第 11 頁",
+    )
+    html = generate_report(_report([f], annotated_pdf_key="abcd1234"))
+    assert "data:image" not in html
+    assert "看標註第 11 頁" in html
 
 
 def test_no_jump_link_when_evidence_has_no_page():

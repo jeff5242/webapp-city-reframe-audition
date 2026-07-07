@@ -52,7 +52,7 @@
     {% if report.annotated_pdf_key %}
     <div class="mt-4">
       <a
-        href="/download/{{ report.annotated_pdf_key }}"
+        href="/download/{{ report.annotated_pdf_key }}?dl=1"
         class="no-print inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
       >
         ⬇ 下載標註 PDF（含問題頁標記）
@@ -261,6 +261,25 @@
               >🔍 看標註第 {{ ev_page }} 頁</a>
               {% endif %}
             </p>
+            {# 問題頁標註截圖（副總 UX）：紅框預覽直接內嵌，零點擊即見問題位置；
+               點圖在新頁開啟完整標註 PDF 並跳至該頁。無截圖時自動略過，只留文字連結。 #}
+            {% if ev_page and report.evidence_images and report.evidence_images.get(ev_page) %}
+            <div class="ml-7 mt-2 no-print">
+              <a
+                href="/download/{{ report.annotated_pdf_key }}#page={{ ev_page }}"
+                target="_blank" rel="noopener"
+                title="點擊在新頁開啟標註 PDF 第 {{ ev_page }} 頁"
+              >
+                <img
+                  src="{{ report.evidence_images.get(ev_page) }}"
+                  alt="第 {{ ev_page }} 頁標註預覽"
+                  loading="lazy"
+                  class="rounded-lg border border-gray-200 shadow-sm max-w-md w-full hover:ring-2 hover:ring-blue-300 transition"
+                />
+              </a>
+              <div class="text-[11px] text-gray-400 mt-1">🖼 第 {{ ev_page }} 頁標註預覽 · 紅框為問題位置（點圖放大看完整 PDF）</div>
+            </div>
+            {% endif %}
             {% endif %}
             {% if finding.reference %}
             <p class="text-xs text-gray-400 ml-7 mt-0.5">法源：{{ finding.reference }}</p>

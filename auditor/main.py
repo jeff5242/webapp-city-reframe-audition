@@ -42,7 +42,8 @@ from .wiki import load_all_wiki
 from .extractors.review_table import extract_review_table
 from .extractors.term_checker import extract_number_contexts, scan_for_wrong_terms
 from .models import AiFinding, AuditData, AuditReport, FindingDiff
-from .reporters.html_reporter import generate_report
+from .reporters.evidence_snapshot import render_evidence_thumbnails
+from .reporters.html_reporter import _evidence_page, generate_report
 from .rules.engine import build_default_engine
 from .storage.history import delete_test_runs, get_prev_run, get_peer_stats, init_db, save_run, save_run_metrics
 from .version_selector import select_version
@@ -467,6 +468,7 @@ def _run_audit_sync(
         _set_task_progress(task_id, "running", "標注 PDF 中…")
         annotated_key: Optional[str] = None
         annotated_s3_key: Optional[str] = None
+        pdf_bytes: Optional[bytes] = None
         try:
             annotate_source = primary_pdf
             masked_bytes: Optional[bytes] = None
@@ -511,6 +513,15 @@ def _run_audit_sync(
             rd_source = None
             rd_page = None
 
+        # 問題頁標註截圖：把已標紅框的頁 raster 成內嵌圖，審核者零點擊看到問題位置。
+        # 純地端光柵化，失敗回空 dict（報告降級成純文字頁碼跳轉，不中斷）。
+        evidence_images: dict[int, str] = {}
+        if pdf_bytes:
+            evidence_pages = {p for p in (_evidence_page(f.evidence) for f in findings) if p}
+            if rd_page:
+                evidence_pages.add(rd_page)
+            evidence_images = render_evidence_thumbnails(pdf_bytes, evidence_pages)
+
         report = AuditReport(
             case_name=case_name,
             audit_time=audit_time,
@@ -528,6 +539,7 @@ def _run_audit_sync(
             diffs=diffs,
             prev_audit_time=prev_audit_time,
             annotated_pdf_key=annotated_key,
+            evidence_images=evidence_images,
             ai_findings=ai_findings,
             peer_stats=peer_stats,
         )
@@ -622,14 +634,17 @@ async def wiki_page(request: Request) -> HTMLResponse:
 
 
 @app.get("/download/{key}")
-async def download_annotated(key: str) -> Response:
+async def download_annotated(key: str, dl: int = 0) -> Response:
+    """標註 PDF：預設 inline（瀏覽器開新頁 + #page=N 直接跳到問題頁，免下載），
+    dl=1 才強制 attachment 下載（供「下載標註 PDF」按鈕）。"""
     pdf_bytes = _PDF_CACHE.get(key)
     if not pdf_bytes:
         raise HTTPException(status_code=404, detail="找不到標註 PDF，請重新審查後下載")
+    disposition = "attachment" if dl else "inline"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="annotated_{key}.pdf"'},
+        headers={"Content-Disposition": f'{disposition}; filename="annotated_{key}.pdf"'},
     )
 
 
