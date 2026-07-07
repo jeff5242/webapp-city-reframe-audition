@@ -81,6 +81,52 @@
     </div>
   </div>
 
+  <!-- Key Numbers (副總 #2)：關鍵數字 + 來源頁 + 跳轉 -->
+  {% if key_numbers %}
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+    <div class="px-6 py-4 border-b border-gray-100">
+      <h2 class="font-semibold text-gray-700">關鍵數字清單
+        <span class="text-xs font-normal text-gray-400 ml-2">系統擷取的審查關鍵值，並標明來源頁供查核</span>
+      </h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-500 text-xs">
+          <tr>
+            <th class="px-6 py-2 text-left font-medium">項目</th>
+            <th class="px-6 py-2 text-left font-medium">數值</th>
+            <th class="px-6 py-2 text-left font-medium">來源</th>
+            <th class="px-6 py-2 text-left font-medium">定位</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for n in key_numbers %}
+          <tr class="{% if n.missing %}bg-slate-50{% endif %}">
+            <td class="px-6 py-2 text-gray-700">{{ n.label }}</td>
+            <td class="px-6 py-2 font-medium {% if n.missing %}text-slate-400{% else %}text-gray-900{% endif %}">
+              {% if n.missing %}未擷取 · 待人工核對{% else %}{{ n.value }}{% endif %}
+            </td>
+            <td class="px-6 py-2 text-gray-500 text-xs">
+              {{ n.source }}{% if n.page %} 第 {{ n.page }} 頁{% endif %}
+            </td>
+            <td class="px-6 py-2">
+              {% if n.page and report.annotated_pdf_key %}
+              <a
+                href="/download/{{ report.annotated_pdf_key }}#page={{ n.page }}"
+                target="_blank" rel="noopener"
+                class="no-print inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium transition-colors"
+                title="開啟標註 PDF 並跳至第 {{ n.page }} 頁"
+              >🔍 看第 {{ n.page }} 頁</a>
+              {% else %}<span class="text-xs text-gray-300">—</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Version Diff (shown when re-uploading same case) -->
   {% if report.diffs %}
   <div class="bg-white rounded-xl shadow-sm border border-indigo-200 mb-6">
@@ -225,6 +271,46 @@
       {% endfor %}
     </div>
   </div>
+
+  <!-- Structured audit opinion (副總 #6)：可一鍵複製貼進承辦意見書 -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
+      <div>
+        <h2 class="font-semibold text-gray-700">審核意見（結構化）</h2>
+        <p class="text-xs text-gray-400 mt-0.5">通用條列式，可直接複製貼進承辦意見書再人工潤飾</p>
+      </div>
+      <button
+        id="copy-opinion-btn"
+        onclick="copyOpinion()"
+        class="no-print shrink-0 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+      >📋 複製審核意見</button>
+    </div>
+    <div class="px-6 py-4">
+      <textarea
+        id="opinion-text"
+        readonly
+        class="w-full h-64 text-xs font-mono text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-4 resize-y focus:outline-none focus:ring-2 focus:ring-blue-200"
+      >{{ audit_opinion_text }}</textarea>
+    </div>
+  </div>
+  <script>
+    function copyOpinion() {
+      var ta = document.getElementById('opinion-text');
+      var btn = document.getElementById('copy-opinion-btn');
+      var done = function () {
+        var old = btn.textContent;
+        btn.textContent = '✓ 已複製';
+        setTimeout(function () { btn.textContent = old; }, 1800);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(ta.value).then(done, function () {
+          ta.select(); document.execCommand('copy'); done();
+        });
+      } else {
+        ta.select(); document.execCommand('copy'); done();
+      }
+    }
+  </script>
 
   <!-- AI Findings (Track B) -->
   {% if report.ai_findings %}

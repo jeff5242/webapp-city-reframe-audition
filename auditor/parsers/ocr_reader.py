@@ -61,6 +61,19 @@ CREATE TABLE IF NOT EXISTS ocr_cache (
 )
 """
 
+# Separate cache for bbox detections (JSON) used by geometric table
+# reconstruction — bboxes can't be recovered from the joined-text cache.
+_CREATE_BOXES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS ocr_boxes_cache (
+    file_hash          TEXT    NOT NULL,
+    page_idx           INTEGER NOT NULL,
+    zoom               REAL    NOT NULL,
+    preprocess_version INTEGER NOT NULL,
+    boxes_json         TEXT    NOT NULL,
+    PRIMARY KEY (file_hash, page_idx, zoom, preprocess_version)
+)
+"""
+
 
 def _get_cache_conn() -> Optional[sqlite3.Connection]:
     """Return a SQLite connection, creating the DB and table if needed.
@@ -84,6 +97,7 @@ def _get_cache_conn() -> Optional[sqlite3.Connection]:
             conn.commit()
             logger.debug("OCR cache schema migrated (dropped old table)")
         conn.execute(_CREATE_TABLE_SQL)
+        conn.execute(_CREATE_BOXES_TABLE_SQL)
         conn.commit()
         return conn
     except Exception as exc:  # pragma: no cover
@@ -118,6 +132,31 @@ def _cache_put(conn: sqlite3.Connection, fhash: str, page_idx: int, zoom: float,
             "INSERT OR REPLACE INTO ocr_cache"
             " (file_hash, page_idx, zoom, preprocess_version, text) VALUES (?,?,?,?,?)",
             (fhash, page_idx, zoom, _PREPROCESS_VERSION, text),
+        )
+        conn.commit()
+
+
+def _boxes_cache_get(conn: sqlite3.Connection, fhash: str, page_idx: int, zoom: float) -> Optional[list]:
+    """Return cached bbox detections (list of dicts), or None if not found."""
+    import json
+    with contextlib.suppress(Exception):
+        row = conn.execute(
+            "SELECT boxes_json FROM ocr_boxes_cache"
+            " WHERE file_hash=? AND page_idx=? AND zoom=? AND preprocess_version=?",
+            (fhash, page_idx, zoom, _PREPROCESS_VERSION),
+        ).fetchone()
+        return json.loads(row[0]) if row else None
+    return None
+
+
+def _boxes_cache_put(conn: sqlite3.Connection, fhash: str, page_idx: int, zoom: float, dets: list) -> None:
+    """Write bbox detections (as JSON) to the cache (ignore failures)."""
+    import json
+    with contextlib.suppress(Exception):
+        conn.execute(
+            "INSERT OR REPLACE INTO ocr_boxes_cache"
+            " (file_hash, page_idx, zoom, preprocess_version, boxes_json) VALUES (?,?,?,?,?)",
+            (fhash, page_idx, zoom, _PREPROCESS_VERSION, json.dumps(dets)),
         )
         conn.commit()
 
@@ -222,28 +261,56 @@ def _binarize(gray: "np.ndarray") -> "np.ndarray":  # type: ignore[name-defined]
         )
 
 
-def _parse_paddle_result(result: object) -> str:
-    """Extract text from a PaddleOCR result for a single image.
+def _box_geometry(box: object) -> Optional[dict]:
+    """Reduce a 4-corner box to {"x0","x1","yc","h"}; None if unparseable.
 
-    Filters detections whose confidence is below ``_OCR_MIN_CONFIDENCE``.
+    box = [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]. Returns None when box is missing
+    (e.g. None) or malformed, so the text is still usable without geometry.
+    """
+    try:
+        xs = [float(pt[0]) for pt in box]  # type: ignore[union-attr]
+        ys = [float(pt[1]) for pt in box]  # type: ignore[union-attr]
+    except (IndexError, TypeError, ValueError):
+        return None
+    if not xs or not ys:
+        return None
+    return {"x0": min(xs), "x1": max(xs), "yc": sum(ys) / len(ys), "h": max(ys) - min(ys)}
+
+
+def _detections_from_result(result: object) -> list[dict]:
+    """Parse a PaddleOCR single-image result into detections.
+
+    Filters detections whose confidence is below ``_OCR_MIN_CONFIDENCE``. Each
+    returned dict has ``{"text","conf"}`` and, when the bbox parses, geometry
+    keys ``{"x0","x1","yc","h"}`` — enough to cluster detections into visual
+    rows and find right-neighbours. Text is kept even if geometry is missing.
 
     PaddleOCR result format per image:
         [[box, (text, confidence)], ...]
     where box = [[x1,y1],[x2,y2],[x3,y3],[x4,y4]].
     """
-    if not result:
-        return ""
-    lines = []
-    for detection in result:
+    dets: list[dict] = []
+    for detection in result or []:
         if detection is None:
             continue
         try:
+            box = detection[0]
             text, confidence = detection[1]
-            if confidence >= _OCR_MIN_CONFIDENCE:
-                lines.append(str(text))
         except (IndexError, TypeError, ValueError):
             continue
-    return "\n".join(lines)
+        if confidence < _OCR_MIN_CONFIDENCE:
+            continue
+        det = {"text": str(text), "conf": float(confidence)}
+        geom = _box_geometry(box)
+        if geom:
+            det.update(geom)
+        dets.append(det)
+    return dets
+
+
+def _parse_paddle_result(result: object) -> str:
+    """Extract joined text from a PaddleOCR result for a single image."""
+    return "\n".join(d["text"] for d in _detections_from_result(result))
 
 
 def _get_reader():
@@ -427,3 +494,60 @@ def ocr_pages(pdf_path: str, page_indices: list[int], zoom: float = 3.0) -> dict
     except Exception as exc:
         logger.warning("OCR batch failed: %s", exc)
         return results
+
+
+def ocr_page_boxes(pdf_path: str, page_index: int, zoom: float = 3.0) -> list[dict]:
+    """OCR one page and return detections WITH bbox geometry.
+
+    Used by geometric table reconstruction (the dense 審議資料表 grid) — the
+    joined-text path discards geometry, so this is a separate, separately-cached
+    pass. Returns a list of {"text","conf","x0","x1","yc","h"}; [] if OCR is
+    unavailable or anything fails.
+
+    Args:
+        pdf_path:   absolute path to the PDF file
+        page_index: 0-based page index
+        zoom:       rendering scale factor (matches the text OCR default)
+    """
+    if not _FITZ_OK:
+        return []
+    reader = _get_reader()
+    if reader is None:
+        return []
+
+    fhash = _file_hash(pdf_path)
+    conn = _get_cache_conn() if fhash else None
+
+    if conn and fhash:
+        cached = _boxes_cache_get(conn, fhash, page_index, zoom)
+        if cached is not None:
+            return cached
+
+    try:
+        import numpy as np
+        from PIL import Image
+
+        doc = _fitz.open(pdf_path)
+        try:
+            if page_index >= len(doc):
+                return []
+            pix = doc[page_index].get_pixmap(matrix=_fitz.Matrix(zoom, zoom))
+        finally:
+            doc.close()
+
+        img = Image.open(io.BytesIO(pix.tobytes("png")))
+        img_array = _preprocess_for_ocr(np.array(img))
+
+        with _INFER_LOCK:
+            result = reader.ocr(img_array, cls=True)
+
+        dets = _detections_from_result(result[0] if result else None)
+
+        if conn and fhash:
+            _boxes_cache_put(conn, fhash, page_index, zoom, dets)
+
+        return dets
+
+    except Exception as exc:
+        logger.warning("OCR boxes failed for page index %d: %s", page_index, exc)
+        return []

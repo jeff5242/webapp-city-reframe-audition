@@ -343,6 +343,27 @@ def _render_page_png(pdf_path: str, page_num: int, zoom: float = _RENDER_ZOOM) -
         return None
 
 
+# ── on-prem geometric bbox reconstruction (副總 #3) ───────────────────────────
+
+def _reconstruct_via_bbox(pdf_path: str, page_num: int) -> Dict[str, object]:
+    """On-prem: reconstruct numeric fields from OCR bbox geometry.
+
+    Sovereign — no API key, no extra model. Returns {} when OCR is unavailable
+    or on any failure (degrades to the vision path just like PP-Structure).
+    """
+    try:
+        from ..parsers.ocr_reader import ocr_page_boxes
+        from .table_reconstruct import reconstruct_fields
+    except Exception:
+        return {}
+    try:
+        dets = ocr_page_boxes(pdf_path, page_num - 1)  # raw_page is 1-based
+        return reconstruct_fields(dets)
+    except Exception as exc:
+        log.warning("bbox reconstruction failed (non-fatal): %s", exc)
+        return {}
+
+
 # ── orchestration ─────────────────────────────────────────────────────────────
 
 def enhance_review_table(
@@ -352,8 +373,14 @@ def enhance_review_table(
 ) -> ReviewTableData:
     """Fill gaps in *base* using hybrid structured extraction.
 
-    On-prem PP-Structure first; escalate the page image to Claude vision only
-    when on-prem coverage of the critical fields stays below *coverage_threshold*.
+    Tiers (each only *fills* missing fields, never overwrites the text pass):
+    1. On-prem PP-Structure table recognition (disabled by default).
+    2. On-prem geometric bbox reconstruction from OCR (副總 #3) — the primary
+       sovereign gap-filler for the dense grid; runs whenever critical-field
+       coverage is still incomplete.
+    3. Claude vision — only when coverage stays below *coverage_threshold* and an
+       API key is present (off in sovereign mode).
+
     Returns *base* unchanged if nothing could be improved.
     """
     page_num = base.raw_page
@@ -363,7 +390,13 @@ def enhance_review_table(
     structured = _extract_via_ppstructure(pdf_path, page_num)
     merged = _merge_into(base, structured)
 
-    # Coverage measured on the merged result (text pass + on-prem structure).
+    # Tier 2 — geometric bbox reconstruction fills any remaining critical gaps.
+    current = {f: getattr(merged, f) for f in _CRITICAL_FIELDS}
+    if _coverage(current) < 1.0:
+        geo = _reconstruct_via_bbox(pdf_path, page_num)
+        merged = _merge_into(merged, geo)
+
+    # Tier 3 — cloud vision escalation (needs API key; off in sovereign mode).
     current = {f: getattr(merged, f) for f in _CRITICAL_FIELDS}
     if _coverage(current) < coverage_threshold:
         vision = _extract_via_vision(pdf_path, page_num)
