@@ -44,6 +44,7 @@ from .extractors.term_checker import extract_number_contexts, scan_for_wrong_ter
 from .models import AiFinding, AuditData, AuditReport, FindingDiff
 from .reporters.evidence_snapshot import render_evidence_thumbnails
 from .reporters.html_reporter import _evidence_page, generate_report
+from .reporters.method_docs import METHOD_DOCS
 from .rules.engine import build_default_engine
 from .storage.history import delete_test_runs, get_prev_run, get_peer_stats, init_db, save_run, save_run_metrics
 from .version_selector import select_version
@@ -592,7 +593,9 @@ async def health() -> JSONResponse:
 
 @app.get("/", response_class=HTMLResponse)
 async def upload_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "upload.html")
+    return templates.TemplateResponse(
+        request, "upload.html", {"method_docs": METHOD_DOCS}
+    )
 
 
 @app.get("/upload-url")
