@@ -93,19 +93,78 @@ def _nearest_value_right(label: dict, dets: List[dict]) -> Optional[str]:
     return value
 
 
-def reconstruct_fields(dets: List[dict]) -> Dict[str, object]:
-    """Map OCR detections to numeric review-table fields by row geometry.
+# 實設汽車停車位常拆成 平面/機械 子列，無單一總數格 → 以 平面+機械 補出總數。
+_PARKING_MAX = 5000  # 車位數合理上限，防止把面積等大數誤當車位
 
-    Returns ``{field: coerced_value}`` for every numeric field whose label is
-    found and whose value parses. Never raises on odd/empty input.
+# 送審類別勾選框：實心勾選記號 + 類別碼/敘述。OCR 對 ■/□ 判讀不穩，故只在偵測到
+# 實心記號緊鄰某類別時才回傳，否則維持 None（人工確認，不亂猜）。
+_FILLED_MARKS = "■▇█☑☒✓✔▪◼◾❚▓"
+_SUBMISSION_TYPE_KEYS = [
+    ("A-1", ("A-1", "A－1", "送件版", "公開展覽")),
+    ("B-1", ("B-1", "B－1", "168專案小組", "專案小組版")),
+    ("B-2", ("B-2", "B－2", "幹事會複審", "幹事會")),
+    ("C", ("審議會版",)),
+    ("D", ("核定版",)),
+]
+
+
+def _int_value_right(label: dict, dets: List[dict]) -> Optional[int]:
+    """label 右側值，強制轉為合理範圍內的整數車位數，否則 None。"""
+    val = _coerce("actual_parking", _nearest_value_right(label, dets))
+    if isinstance(val, int) and 0 <= val <= _PARKING_MAX:
+        return val
+    return None
+
+
+def _sum_actual_parking(dets: List[dict]) -> Optional[int]:
+    """實設汽車停車位總數 = 平面 + 機械。需同時取到兩子項且頁面有「實設」錨點才回傳，
+    否則 None（不猜）。避免把不相關的『平面/機械』字樣誤當停車位。"""
+    if not any("實設" in (d.get("text") or "") for d in dets):
+        return None
+    surface = mech = None
+    for d in dets:
+        text = (d.get("text") or "").strip()
+        if surface is None and "平面" in text:
+            surface = _int_value_right(d, dets)
+        if mech is None and "機械" in text:
+            mech = _int_value_right(d, dets)
+    if surface is not None and mech is not None:
+        return surface + mech
+    return None
+
+
+def _detect_submission_type(dets: List[dict]) -> Optional[str]:
+    """從勾選框判送審類別：找『實心勾選記號 + 類別碼/敘述』。只有偵測到實心記號緊鄰
+    某類別時才回傳（維持人工確認的安全預設，OCR 未產生實心記號時回 None）。"""
+    joined = " ".join((d.get("text") or "") for d in dets)
+    for code, keys in _SUBMISSION_TYPE_KEYS:
+        for kw in keys:
+            start = 0
+            while True:
+                idx = joined.find(kw, start)
+                if idx == -1:
+                    break
+                if any(m in joined[max(0, idx - 5):idx] for m in _FILLED_MARKS):
+                    return code
+                start = idx + 1
+    return None
+
+
+def reconstruct_fields(dets: List[dict]) -> Dict[str, object]:
+    """Map OCR detections to review-table fields.
+
+    Numeric fields come from row geometry (label→nearest-right value). Two
+    審議資料表-specific補強：實設汽車停車位以 平面+機械 加總補出；送審類別以勾選框
+    判讀。Never raises on odd/empty input.
     """
-    # Only detections carrying geometry can be placed on the grid.
-    dets = [d for d in dets if "yc" in d and "x0" in d and "x1" in d]
-    if not dets:
-        return {}
+    # 勾選框判讀用「全部」偵測文字（實心記號可能無幾何資訊）。
+    submission_type = _detect_submission_type(dets)
+
+    # 幾何欄位只能用帶座標的偵測。
+    geo_dets = [d for d in dets if "yc" in d and "x0" in d and "x1" in d]
 
     result: Dict[str, object] = {}
-    for det in dets:
+    for det in geo_dets:
         text = (det.get("text") or "").strip()
         if not text:
             continue
@@ -121,4 +180,12 @@ def reconstruct_fields(dets: List[dict]) -> Dict[str, object]:
                 if value is not None:
                     result[field] = value
                 break
+
+    # 實設汽車停車位：平面+機械 加總（優先於主迴圈可能抓到的單一子格值）。
+    total = _sum_actual_parking(geo_dets)
+    if total is not None:
+        result["actual_parking"] = total
+
+    if submission_type:
+        result["submission_type"] = submission_type
     return result

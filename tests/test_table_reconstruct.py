@@ -185,3 +185,63 @@ def test_base_floor_area_comma_value():
         _det("812.00", 126, 190, 50),
     ]
     assert reconstruct_fields(dets)["base_floor_area"] == 2812.00
+
+
+# ── 實設汽車停車位 = 平面 + 機械（審議資料表拆成子列，副總回饋）──────────────
+
+def test_actual_parking_sums_surface_and_mechanical():
+    dets = [
+        _det("實設汽車停車位（充電0輛）", 0, 150, 100),
+        _det("平面", 160, 200, 90), _det("25", 210, 250, 90),
+        _det("機械", 160, 200, 140), _det("13", 210, 250, 140),
+    ]
+    assert reconstruct_fields(dets)["actual_parking"] == 38
+
+
+def test_actual_parking_no_sum_without_shishe_anchor():
+    # 沒有「實設」錨點 → 不把不相關的 平面/機械 當停車位
+    dets = [
+        _det("平面", 160, 200, 90), _det("25", 210, 250, 90),
+        _det("機械", 160, 200, 140), _det("13", 210, 250, 140),
+    ]
+    assert "actual_parking" not in reconstruct_fields(dets)
+
+
+def test_actual_parking_no_sum_when_only_one_subrow():
+    dets = [
+        _det("實設汽車停車位", 0, 150, 100),
+        _det("平面", 160, 200, 90), _det("25", 210, 250, 90),
+    ]
+    # 只有平面、沒有機械 → 不猜總數
+    assert reconstruct_fields(dets).get("actual_parking") != 25 or \
+        "actual_parking" not in reconstruct_fields(dets)
+
+
+# ── 送審類別勾選框判讀 ────────────────────────────────────────────────────────
+
+def test_submission_type_from_checked_box():
+    dets = [_det("■B-1：168專案小組版", 0, 300, 50)]
+    assert reconstruct_fields(dets)["submission_type"] == "B-1"
+
+
+def test_submission_type_checked_by_description():
+    dets = [_det("☑ 審議會版", 0, 200, 50)]
+    assert reconstruct_fields(dets)["submission_type"] == "C"
+
+
+def test_submission_type_none_when_no_filled_box():
+    # 全是空框 □ → 不判定（維持人工確認）
+    dets = [
+        _det("□A-1：送件版", 0, 200, 50),
+        _det("□B-1：168專案小組版", 0, 200, 80),
+    ]
+    assert "submission_type" not in reconstruct_fields(dets)
+
+
+def test_submission_type_picks_only_the_filled_one():
+    dets = [
+        _det("□A-1：送件版", 0, 200, 50),
+        _det("■B-2：幹事會複審版", 0, 200, 80),
+        _det("□C：審議會版", 0, 200, 110),
+    ]
+    assert reconstruct_fields(dets)["submission_type"] == "B-2"
