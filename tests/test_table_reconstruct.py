@@ -106,3 +106,34 @@ def test_detections_keep_text_when_box_missing():
     dets = _detections_from_result([[None, ("純文字", 0.9)]])
     assert dets[0]["text"] == "純文字"
     assert "x0" not in dets[0]
+
+
+# ── 逗號千分位被 OCR 切開的還原（副總回饋：1,406.00 被讀成 406.00）──────────
+
+def test_comma_split_thousands_are_merged():
+    # OCR 把「1,406.00」切成「1,」+「406.00」兩個偵測，需還原成 1406.00
+    dets = [
+        _det("容積獎勵申請額度", 0, 150, 50),
+        _det("1,", 160, 175, 50),
+        _det("406.00", 176, 240, 50),
+    ]
+    assert reconstruct_fields(dets)["bonus_floor_area"] == 1406.00
+
+
+def test_complete_number_not_merged_with_next_cell():
+    # 完整數字不以逗號結尾 → 不併入相鄰的獨立數字格
+    dets = [
+        _det("法定汽車停車位", 0, 100, 50),
+        _det("58", 110, 140, 50),
+        _det("108", 300, 340, 50),   # 另一格的獨立數字，不該被併進來
+    ]
+    assert reconstruct_fields(dets)["legal_parking"] == 58
+
+
+def test_applied_amount_label_maps_to_bonus_floor_area():
+    # 大魯閣審議資料表用「容積獎勵申請額度」字樣，bbox 圖需能對應
+    dets = [
+        _det("容積獎勵申請額度", 0, 150, 50),
+        _det("1,406.00", 160, 260, 50),
+    ]
+    assert reconstruct_fields(dets)["bonus_floor_area"] == 1406.00

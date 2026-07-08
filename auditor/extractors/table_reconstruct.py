@@ -34,6 +34,11 @@ _ROW_TOL_RATIO = 0.6
 
 _TRAILING_NUM_RE = re.compile(r"([0-9][0-9,\.]*)\s*$")
 
+# 純數字片段（含千分位逗號/小數點/空白），用來判斷可否續接
+_NUM_FRAG_RE = re.compile(r"^[0-9][0-9,，.\s]*$")
+# 懸空的千分位前綴，如「1,」「12,」——OCR 常把「1,406.00」切成「1,」+「406.00」
+_DANGLING_THOUSANDS_RE = re.compile(r"[0-9][,，]\s*$")
+
 
 def _same_row(a: dict, b: dict, tol_ratio: float = _ROW_TOL_RATIO) -> bool:
     """True when two detections sit on the same visual row (y-centres close)."""
@@ -41,23 +46,45 @@ def _same_row(a: dict, b: dict, tol_ratio: float = _ROW_TOL_RATIO) -> bool:
     return abs(a["yc"] - b["yc"]) <= tol
 
 
-def _nearest_value_right(label: dict, dets: List[dict]) -> Optional[str]:
-    """Text of the nearest detection to the right of *label* on the same row."""
-    best: Optional[dict] = None
-    best_gap: Optional[float] = None
+def _same_row_right(label: dict, dets: List[dict]) -> List[dict]:
+    """同列、位於 label 右側的偵測，依 x0 由近到遠排序。"""
+    out: List[dict] = []
     for d in dets:
-        if d is label:
-            continue
-        if not _same_row(label, d):
+        if d is label or not _same_row(label, d):
             continue
         gap = d["x0"] - label["x1"]
-        # Allow a small overlap (labels/values sometimes touch) but reject cells
-        # that start clearly to the left of the label.
+        # 容許少量重疊（標籤與值有時相黏），但排除明顯在標籤左邊的格子。
         if gap < -label.get("h", 0.0):
             continue
-        if best_gap is None or gap < best_gap:
-            best, best_gap = d, gap
-    return best["text"] if best is not None else None
+        out.append(d)
+    out.sort(key=lambda d: d["x0"])
+    return out
+
+
+def _nearest_value_right(label: dict, dets: List[dict]) -> Optional[str]:
+    """label 右側最近偵測的文字；若最近值以千分位逗號結尾（OCR 把「1,406.00」
+    切成「1,」+「406.00」），續接後面的數字片段還原完整數字。
+
+    續接條件嚴格：僅在目前累積值「以逗號結尾」時才接下一個純數字片段，因此不會
+    把相鄰的獨立數字格誤併在一起（完整數字不會以逗號結尾）。
+    """
+    right = _same_row_right(label, dets)
+    if not right:
+        return None
+
+    value = (right[0].get("text") or "").strip()
+    # 最近值非數字 → 原樣回傳（數值欄位會由 _coerce 判為 None，安全）
+    if not _NUM_FRAG_RE.match(value):
+        return value
+
+    for d in right[1:]:
+        if not _DANGLING_THOUSANDS_RE.search(value):
+            break  # 目前累積值已是完整數字，不再併入相鄰格
+        frag = (d.get("text") or "").strip()
+        if not _NUM_FRAG_RE.match(frag):
+            break
+        value += frag
+    return value
 
 
 def reconstruct_fields(dets: List[dict]) -> Dict[str, object]:
