@@ -24,7 +24,13 @@ from __future__ import annotations
 import re
 from typing import Dict, List, Optional
 
-from .table_extractor import _FLOAT_FIELDS, _INT_FIELDS, _LABEL_FIELD_MAP, _coerce
+from .table_extractor import (
+    _FLOAT_FIELDS,
+    _INT_FIELDS,
+    _coerce,
+    _iter_label_map,
+    _label_matches,
+)
 
 _NUMERIC_FIELDS = _FLOAT_FIELDS | _INT_FIELDS
 
@@ -103,10 +109,10 @@ def reconstruct_fields(dets: List[dict]) -> Dict[str, object]:
         text = (det.get("text") or "").strip()
         if not text:
             continue
-        for keywords, field in _LABEL_FIELD_MAP:
+        for keywords, field, excludes in _iter_label_map():
             if field in result or field not in _NUMERIC_FIELDS:
                 continue
-            if any(kw in text for kw in keywords):
+            if _label_matches(text, keywords, excludes):
                 raw = _nearest_value_right(det, dets)
                 if raw is None:
                     m = _TRAILING_NUM_RE.search(text)

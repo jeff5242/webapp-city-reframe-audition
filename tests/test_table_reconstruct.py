@@ -137,3 +137,51 @@ def test_applied_amount_label_maps_to_bonus_floor_area():
         _det("1,406.00", 160, 260, 50),
     ]
     assert reconstruct_fields(dets)["bonus_floor_area"] == 1406.00
+
+
+# ── 停車位標籤消歧（大魯閣審議資料表實際用字）────────────────────────────────
+
+def test_legal_parking_matches_han_wuzhangai_label():
+    # 大魯閣用「法定(含無障礙)汽車停車位 46輛」——舊關鍵字「法定汽車停車位」抓不到
+    dets = [
+        _det("法定(含無障礙)汽車停車位", 0, 200, 50),
+        _det("46", 210, 240, 50),
+    ]
+    assert reconstruct_fields(dets)["legal_parking"] == 46
+
+
+def test_accessible_not_grab_legal_total_row():
+    # 「法定(含無障礙)汽車停車位 46」不可被誤判為無障礙(應為法定總數)
+    dets = [
+        _det("法定(含無障礙)汽車停車位", 0, 200, 50),
+        _det("46", 210, 240, 50),
+    ]
+    out = reconstruct_fields(dets)
+    assert out.get("accessible_parking") != 46
+
+
+def test_accessible_matches_dedicated_row():
+    dets = [
+        _det("法定無障礙汽車停車位", 0, 200, 50),
+        _det("2", 210, 240, 50),
+    ]
+    assert reconstruct_fields(dets)["accessible_parking"] == 2
+
+
+def test_accessible_excludes_volume_incentive_item():
+    # 「#12無障礙環境設計 84.36㎡」是容積獎勵項，不可被當成無障礙停車位
+    dets = [
+        _det("#12無障礙環境設計", 0, 200, 50),
+        _det("84.36", 210, 260, 50),
+    ]
+    assert "accessible_parking" not in reconstruct_fields(dets)
+
+
+def test_base_floor_area_comma_value():
+    # 基準容積 2,812.00 —— 逗號合併後應為 2812.0
+    dets = [
+        _det("基準容積", 0, 100, 50),
+        _det("2,", 110, 125, 50),
+        _det("812.00", 126, 190, 50),
+    ]
+    assert reconstruct_fields(dets)["base_floor_area"] == 2812.00

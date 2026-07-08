@@ -107,12 +107,20 @@ def _merge_into(base: ReviewTableData, fields: Dict[str, object]) -> ReviewTable
 
 # ── PP-Structure cell mapping (pure) ──────────────────────────────────────────
 
-# label keyword(s) → field. Order matters: more specific labels first so that
-# e.g. "實設汽車停車位" is matched before a looser "停車位".
+# label keyword(s) → field。條目為 (keywords, field) 或 (keywords, field, excludes)。
+# keyword 可為字串（子字串比對）或字串 tuple（需全部出現，AND）；excludes 任一出現
+# 即否決該欄位——用來拆解「無障礙」在審議資料表中多處出現造成的誤配。
+# 順序有意義：較特定的標籤在前（如「實設汽車停車位」先於較鬆的「停車位」）。
 _LABEL_FIELD_MAP: List[tuple] = [
-    (("實設汽車停車位", "實設停車位"), "actual_parking"),
-    (("法定汽車停車位", "法定停車位"), "legal_parking"),
-    (("無障礙停車位", "無障礙"), "accessible_parking"),
+    # 實設汽車停車位常被拆成 平面/機械/無障礙/充電 子列，單格總數多半取不到，維持盡力。
+    (("實設汽車停車位", "實設停車位", ("實設", "汽車停車位")), "actual_parking"),
+    # 法定汽車停車位總數。相容「法定汽車停車位」與大魯閣「法定(含無障礙)汽車停車位」；
+    # 後者靠 AND「法定+汽車停車位+含無障礙」判別，才不會誤配到僅無障礙數的
+    # 「法定無障礙汽車停車位」列（該列無「含無障礙」）。
+    (("法定汽車停車位", "法定停車位",
+      ("法定", "汽車停車位", "含無障礙")), "legal_parking"),
+    # 無障礙停車位：排除「(含無障礙)法定總數列」與「無障礙環境設計」等容積獎勵項。
+    (("無障礙",), "accessible_parking", ("含無障礙", "環境", "設計")),
     (("充電車位", "充電"), "ev_parking"),
     (("基地面積",), "land_area"),
     (("基準容積",), "base_floor_area"),
@@ -123,6 +131,31 @@ _LABEL_FIELD_MAP: List[tuple] = [
     (("實施者",), "implementer"),
     (("填表日期",), "fill_date"),
 ]
+
+
+def _iter_label_map():
+    """逐條產生 (keywords, field, excludes)，容忍 2-tuple 或 3-tuple 條目。"""
+    for entry in _LABEL_FIELD_MAP:
+        if len(entry) == 3:
+            keywords, field, excludes = entry
+        else:
+            keywords, field = entry
+            excludes = ()
+        yield keywords, field, excludes
+
+
+def _label_matches(text: str, keywords, excludes=()) -> bool:
+    """text 是否命中此欄位標籤。keyword 為字串（子字串）或字串 tuple（AND，需全含）；
+    excludes 任一出現即否決（用來區分易混淆的相似標籤，如多處「無障礙」）。"""
+    if any(x in text for x in excludes):
+        return False
+    for kw in keywords:
+        if isinstance(kw, tuple):
+            if all(part in text for part in kw):
+                return True
+        elif kw in text:
+            return True
+    return False
 
 
 def _map_structured_cells(cells: List[dict]) -> Dict[str, object]:
@@ -140,10 +173,10 @@ def _map_structured_cells(cells: List[dict]) -> Dict[str, object]:
         text = (cell.get("text") or "").strip()
         if not text:
             continue
-        for keywords, field in _LABEL_FIELD_MAP:
+        for keywords, field, excludes in _iter_label_map():
             if field in result:
                 continue
-            if any(kw in text for kw in keywords):
+            if _label_matches(text, keywords, excludes):
                 right = by_pos.get((cell["row"], cell["col"] + 1), "")
                 value = right or text
                 result[field] = value
