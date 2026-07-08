@@ -168,15 +168,14 @@
   </div>
   {% endif %}
 
-  <!-- Findings -->
+  {# 分級說明（副總 #4）：獨立成卡片，避免與下方明細混在一起被誤認為「檢查結果」。
+     白話定義每一級 + 審核者「下一步該做什麼」；必檢＝一定要改，建議提醒＝人工確認非違規。 #}
   <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
     <div class="px-6 py-4 border-b border-gray-100">
-      <h2 class="font-semibold text-gray-700">審查結果明細</h2>
+      <h2 class="font-semibold text-gray-700">分級說明</h2>
+      <p class="text-xs text-gray-400 mt-0.5">本系統自訂分級，供快速判讀；以下為級別定義，非本案檢查結果。</p>
     </div>
-    {# 分級圖例（副總 #4）：白話定義每一級 + 審核者「下一步該做什麼」。
-       必檢＝一定要看/一定要改；建議提醒＝系統請人工確認，非實施者違規。 #}
-    <div class="px-6 py-3 bg-gray-50 border-b border-gray-100">
-      <p class="text-xs font-medium text-gray-500 mb-2">分級說明（本系統自訂，供快速判讀）</p>
+    <div class="px-6 py-4">
       <div class="grid sm:grid-cols-2 gap-2 text-xs">
         <div class="flex items-start gap-2">
           <span class="shrink-0 bg-red-600 text-white px-2 py-0.5 rounded-full">必檢 · 應修正</span>
@@ -195,6 +194,13 @@
           <span class="text-gray-600">符合規定 → <span class="font-medium text-gray-700">無需處理</span></span>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Findings -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+    <div class="px-6 py-4 border-b border-gray-100">
+      <h2 class="font-semibold text-gray-700">審查結果明細</h2>
     </div>
     {# 同一問題頁的標註截圖只內嵌一次（多條 finding 指同頁時避免重複塞 base64 撐爆報告） #}
     {% set shown_pages = namespace(ids=[]) %}
