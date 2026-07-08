@@ -220,29 +220,42 @@ def test_actual_parking_no_sum_when_only_one_subrow():
 # ── 送審類別勾選框判讀 ────────────────────────────────────────────────────────
 
 def test_submission_type_from_checked_box():
-    dets = [_det("■B-1：168專案小組版", 0, 300, 50)]
+    # 勾選框表單（合家歡）：送審類別標籤 + 同列 ■B-1
+    dets = [
+        _det("送審類別", 0, 150, 50),
+        _det("■B-1：168專案小組版", 160, 460, 50),
+    ]
     assert reconstruct_fields(dets)["submission_type"] == "B-1"
 
 
-def test_submission_type_checked_by_description():
-    dets = [_det("☑ 審議會版", 0, 200, 50)]
+def test_submission_type_from_text_value():
+    # 文字值表單（大魯閣）：送審類別 + 同列「(第1次)審議會版(第1次補正)」→ C
+    dets = [
+        _det("送審類別", 0, 150, 50),
+        _det("（第1次審議會版（第1次補正）", 160, 500, 50),
+    ]
     assert reconstruct_fields(dets)["submission_type"] == "C"
 
 
-def test_submission_type_none_when_no_filled_box():
-    # 全是空框 □ → 不判定（維持人工確認）
+def test_submission_type_none_without_label_anchor():
+    # 沒有「送審類別」標籤 → 不判定（避免抓到頁面別處的版次字樣）
+    dets = [_det("■B-1：168專案小組版", 0, 300, 50)]
+    assert "submission_type" not in reconstruct_fields(dets)
+
+
+def test_submission_type_none_when_all_options_printed_no_mark():
+    # 各選項都印在同列、無勾記 → 多重比對 → 回 None（人工確認）
     dets = [
-        _det("□A-1：送件版", 0, 200, 50),
-        _det("□B-1：168專案小組版", 0, 200, 80),
+        _det("送審類別", 0, 150, 50),
+        _det("□A-1送件版□B-1專案小組版□C審議會版", 160, 600, 50),
     ]
     assert "submission_type" not in reconstruct_fields(dets)
 
 
-def test_submission_type_picks_only_the_filled_one():
+def test_submission_type_picks_filled_among_options():
     dets = [
-        _det("□A-1：送件版", 0, 200, 50),
-        _det("■B-2：幹事會複審版", 0, 200, 80),
-        _det("□C：審議會版", 0, 200, 110),
+        _det("送審類別", 0, 150, 50),
+        _det("□A-1送件版■B-2幹事會複審版□C審議會版", 160, 700, 50),
     ]
     assert reconstruct_fields(dets)["submission_type"] == "B-2"
 

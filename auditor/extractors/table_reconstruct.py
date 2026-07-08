@@ -133,21 +133,41 @@ def _sum_actual_parking(dets: List[dict]) -> Optional[int]:
     return None
 
 
-def _detect_submission_type(dets: List[dict]) -> Optional[str]:
-    """從勾選框判送審類別：找『實心勾選記號 + 類別碼/敘述』。只有偵測到實心記號緊鄰
-    某類別時才回傳（維持人工確認的安全預設，OCR 未產生實心記號時回 None）。"""
-    joined = " ".join((d.get("text") or "") for d in dets)
+def _checked_code(text: str) -> Optional[str]:
+    """文字中『實心勾選記號緊鄰類別碼/敘述』→ 該類別碼（勾選框表單，如合家歡 ■B-1）。"""
     for code, keys in _SUBMISSION_TYPE_KEYS:
         for kw in keys:
             start = 0
             while True:
-                idx = joined.find(kw, start)
+                idx = text.find(kw, start)
                 if idx == -1:
                     break
-                if any(m in joined[max(0, idx - 5):idx] for m in _FILLED_MARKS):
+                if any(m in text[max(0, idx - 5):idx] for m in _FILLED_MARKS):
                     return code
                 start = idx + 1
     return None
+
+
+def _detect_submission_type(dets: List[dict]) -> Optional[str]:
+    """判送審類別，以「送審類別」標籤為錨、取同列右側的值：
+    1. 勾選框表單（合家歡 ■B-1）：實心記號緊鄰類別 → 該碼。
+    2. 文字值表單（大魯閣「(第1次)審議會版(第1次補正)」）：右側只出現單一版次敘述
+       → 採用。若同時出現多個版次敘述（各選項都印在同列且無勾記）→ 回 None，維持
+       人工確認，不亂猜。
+    """
+    geo = [d for d in dets if "yc" in d and "x0" in d and "x1" in d]
+    label = next((d for d in geo if "送審類別" in (d.get("text") or "")), None)
+    if label is None:
+        return None
+    right = _same_row_right(label, geo)
+    text = "".join((d.get("text") or "") for d in right)
+
+    checked = _checked_code(text)
+    if checked:
+        return checked
+
+    matched = {code for code, keys in _SUBMISSION_TYPE_KEYS if any(k in text for k in keys)}
+    return next(iter(matched)) if len(matched) == 1 else None
 
 
 def reconstruct_fields(dets: List[dict]) -> Dict[str, object]:
