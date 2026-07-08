@@ -245,3 +245,20 @@ def test_submission_type_picks_only_the_filled_one():
         _det("□C：審議會版", 0, 200, 110),
     ]
     assert reconstruct_fields(dets)["submission_type"] == "B-2"
+
+
+def test_base_floor_area_ignores_formula_token():
+    # 「基準容積+中央容積…」公式文字不可被當成 基準容積 標籤（曾誤抓鄰值 15）
+    dets = [
+        _det("基準容積+中", 0, 150, 50),
+        _det("15", 160, 200, 50),
+    ]
+    assert "base_floor_area" not in reconstruct_fields(dets)
+
+
+def test_base_floor_area_plain_label_still_matches():
+    dets = [
+        _det("基準容積", 0, 100, 50),
+        _det("2,812.00", 110, 200, 50),
+    ]
+    assert reconstruct_fields(dets)["base_floor_area"] == 2812.00

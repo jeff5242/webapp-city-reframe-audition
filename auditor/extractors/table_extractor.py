@@ -135,7 +135,8 @@ _LABEL_FIELD_MAP: List[tuple] = [
     (("無障礙",), "accessible_parking", ("含無障礙", "環境", "設計")),
     (("充電車位", "充電"), "ev_parking"),
     (("基地面積",), "land_area"),
-    (("基準容積",), "base_floor_area"),
+    # 排除公式文字「基準容積+中央容積…」誤配成標籤（會抓到錯的鄰值，如 15）。
+    (("基準容積",), "base_floor_area", ("+", "＋")),
     (("獎勵樓地板面積合計", "合計獎勵樓地板面積", "獎勵面積合計", "獎勵合計",
       "容積獎勵申請額度", "申請額度"), "bonus_floor_area"),
     (("容積獎勵上限", "獎勵上限"), "bonus_limit"),
@@ -403,7 +404,9 @@ def _reconstruct_via_bbox(pdf_path: str, page_num: int) -> Dict[str, object]:
     except Exception:
         return {}
     try:
-        dets = ocr_page_boxes(pdf_path, page_num - 1)  # raw_page is 1-based
+        # zoom=5：正式機診斷實測——審議資料表數值密集，zoom 3 會把「1,406.00」讀成
+        # 「406」(掉字)、平面/機械子格漏偵；zoom 5 才穩定讀回完整數字與子格。
+        dets = ocr_page_boxes(pdf_path, page_num - 1, zoom=5.0)
         return reconstruct_fields(dets)
     except Exception as exc:
         log.warning("bbox reconstruction failed (non-fatal): %s", exc)
