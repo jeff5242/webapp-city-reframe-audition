@@ -218,10 +218,13 @@ def extract_front_docs(
 
         if is_toc:
             # TOC page: check ALL doc types — a single TOC lists multiple headings.
+            # 標記 from_toc=True：這只是目錄「列出」該文件，page 是目錄頁而非實際文件頁。
+            # 之後若在真正內容頁找到同類文件，顯示時會優先用內容頁（見 document.py）。
             for dt, patterns in _DOC_PATTERNS.items():
                 if any(p in text for p in patterns):
                     if not any(d.doc_type == dt for d in docs):
-                        docs.append(FrontDoc(doc_type=dt, page=page_num, purpose=None))
+                        docs.append(FrontDoc(doc_type=dt, page=page_num,
+                                             purpose=None, from_toc=True))
         elif is_front_section:
             # Content page within front-matter range: match doc type and extract date.
             # Pages recovered by OCR use a more permissive date regex (no prefix required).

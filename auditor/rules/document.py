@@ -1,7 +1,25 @@
 from __future__ import annotations
 
-from ..models import AuditData, Finding
+from typing import Optional
+
+from ..models import AuditData, Finding, FrontDoc
 from .engine import Rule
+
+
+def _locate(fd, doc_type: str) -> Optional[FrontDoc]:
+    """回傳該類文件的代表筆：優先真正內容頁（from_toc=False），退而用目錄列出的那筆。"""
+    content = next((d for d in fd.docs if d.doc_type == doc_type and not d.from_toc), None)
+    return content or next((d for d in fd.docs if d.doc_type == doc_type), None)
+
+
+def _doc_evidence(doc: Optional[FrontDoc]) -> str:
+    """誠實標示來源：內容頁標實際頁；僅在目錄找到者明講「目錄列出、實際頁待確認」，
+    避免把目錄頁誤當成文件所在頁。"""
+    if doc is None:
+        return ""
+    if doc.from_toc:
+        return f"第 {doc.page} 頁（目錄列出，實際頁面待人工核對）"
+    return f"第 {doc.page} 頁"
 
 
 class ApplicationFormRule(Rule):
@@ -15,8 +33,10 @@ class ApplicationFormRule(Rule):
         if fd is None:
             return self._skip("封面文件未能解析")
         if fd.has_application:
-            app = next((d for d in fd.docs if d.doc_type == "申請書"), None)
-            return self._pass("申請書已找到", evidence=f"第 {app.page} 頁" if app else "")
+            app = _locate(fd, "申請書")
+            msg = "申請書已找到（僅目錄列出，實際頁面待人工核對）" if app and app.from_toc \
+                else "申請書已找到"
+            return self._pass(msg, evidence=_doc_evidence(app))
         return self._fail("未找到申請書（都市更新事業計畫申請書）")
 
 
@@ -31,8 +51,10 @@ class AffidavitRule(Rule):
         if fd is None:
             return self._skip("封面文件未能解析")
         if fd.has_affidavit:
-            doc = next((d for d in fd.docs if d.doc_type == "切結書"), None)
-            return self._pass("切結書已找到", evidence=f"第 {doc.page} 頁" if doc else "")
+            doc = _locate(fd, "切結書")
+            msg = "切結書已找到（僅目錄列出，實際頁面待人工核對）" if doc and doc.from_toc \
+                else "切結書已找到"
+            return self._pass(msg, evidence=_doc_evidence(doc))
         return self._fail("未找到切結書")
 
 
@@ -66,11 +88,10 @@ class ReviewTablePresentRule(Rule):
         if fd is None:
             return self._skip("封面文件未能解析")
         if fd.has_review_table:
-            doc = next((d for d in fd.docs if d.doc_type == "審議資料表"), None)
-            return self._pass(
-                "臺北市都市更新審議資料表已找到",
-                evidence=f"第 {doc.page} 頁" if doc else "",
-            )
+            doc = _locate(fd, "審議資料表")
+            msg = "臺北市都市更新審議資料表已找到（僅目錄列出，實際頁面待人工核對）" \
+                if doc and doc.from_toc else "臺北市都市更新審議資料表已找到"
+            return self._pass(msg, evidence=_doc_evidence(doc))
         rt = data.review_table
         if rt is not None:
             return self._pass(

@@ -18,6 +18,7 @@ class FrontDoc:
     doc_type: str  # "申請書", "切結書", "委託書", "審議資料表"
     page: int
     purpose: Optional[str] = None  # for 委託書: "都更規劃", "建築設計", etc.
+    from_toc: bool = False  # True 表示僅在目錄頁列出，page 為目錄頁而非實際文件頁
 
 
 @dataclass(frozen=True)

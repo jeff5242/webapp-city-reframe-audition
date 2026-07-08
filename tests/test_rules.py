@@ -7,7 +7,7 @@ Test data reflects the two real cases audited:
 from __future__ import annotations
 
 import pytest
-from auditor.models import AuditData, FrontDocsData, PiiRisk, ReviewTableData
+from auditor.models import AuditData, FrontDoc, FrontDocsData, PiiRisk, ReviewTableData
 from auditor.rules.document import (
     AffidavitRule,
     ApplicationFormRule,
@@ -85,6 +85,47 @@ class TestApplicationFormRule:
         finding = ApplicationFormRule().evaluate(data)
         assert finding.status == "fail"
         assert finding.severity == "critical"
+
+
+class TestDocLocationEvidence:
+    """副總回饋：申請書只標到目錄頁 → 目錄列出者須誠實標註，內容頁優先。"""
+
+    def _data_with_docs(self, docs):
+        fd = FrontDocsData(
+            docs=tuple(docs), poa_count=0,
+            has_application=any(d.doc_type == "申請書" for d in docs),
+            has_affidavit=False,
+            has_review_table=any(d.doc_type == "審議資料表" for d in docs),
+        )
+        return AuditData(review_table=None, front_docs=fd, pii_risks=[])
+
+    def test_toc_only_application_flags_uncertain_page(self):
+        data = self._data_with_docs([FrontDoc("申請書", page=2, from_toc=True)])
+        f = ApplicationFormRule().evaluate(data)
+        assert f.status == "pass"
+        assert "目錄列出" in f.evidence
+        assert "待人工核對" in f.message
+
+    def test_content_page_preferred_over_toc(self):
+        # 同時有目錄(第2頁)與內容頁(第25頁) → 顯示內容頁、不標「目錄列出」
+        data = self._data_with_docs([
+            FrontDoc("申請書", page=2, from_toc=True),
+            FrontDoc("申請書", page=25, from_toc=False),
+        ])
+        f = ApplicationFormRule().evaluate(data)
+        assert f.evidence == "第 25 頁"
+        assert "目錄列出" not in f.message
+
+    def test_content_page_plain_evidence(self):
+        data = self._data_with_docs([FrontDoc("申請書", page=25, from_toc=False)])
+        f = ApplicationFormRule().evaluate(data)
+        assert f.evidence == "第 25 頁"
+
+    def test_review_table_toc_only_flagged(self):
+        data = self._data_with_docs([FrontDoc("審議資料表", page=2, from_toc=True)])
+        f = ReviewTablePresentRule().evaluate(data)
+        assert f.status == "pass"
+        assert "目錄列出" in f.evidence
 
 
 class TestAffidavitRule:
