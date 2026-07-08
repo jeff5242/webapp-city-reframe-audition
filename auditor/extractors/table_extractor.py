@@ -49,10 +49,19 @@ _INT_FIELDS = {"legal_parking", "actual_parking", "accessible_parking", "ev_park
 
 # ── numeric parsing ───────────────────────────────────────────────────────────
 
+# 由 OCR 文字取「開頭的數字串」（含千分位逗號、選擇性小數）。容忍 OCR 常見雜訊，
+# 如「2，812!」「46.00M1」「703.」——只取有效數字段，其餘丟棄。
+_NUM_RUN_RE = re.compile(r"\d[\d,，]*(?:\.\d+)?")
+_INT_RUN_RE = re.compile(r"\d[\d,，]*")
+
+
 def _to_float(raw) -> Optional[float]:
     if raw is None:
         return None
-    cleaned = re.sub(r"[,，\s平方公尺m²㎡%]", "", str(raw))
+    m = _NUM_RUN_RE.search(str(raw))
+    if not m:
+        return None
+    cleaned = m.group(0).replace(",", "").replace("，", "")
     try:
         return float(cleaned)
     except ValueError:
@@ -62,7 +71,10 @@ def _to_float(raw) -> Optional[float]:
 def _to_int(raw) -> Optional[int]:
     if raw is None:
         return None
-    digits = re.sub(r"[^\d]", "", str(raw))
+    m = _INT_RUN_RE.search(str(raw))  # 取小數點前整數（停車位等為整數）
+    if not m:
+        return None
+    digits = m.group(0).replace(",", "").replace("，", "")
     return int(digits) if digits else None
 
 

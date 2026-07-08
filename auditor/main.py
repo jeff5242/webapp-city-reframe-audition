@@ -670,6 +670,7 @@ async def download_annotated(key: str, dl: int = 0) -> Response:
 async def debug_ocr(
     pdf: UploadFile = File(...),
     page: int = Form(...),
+    zoom: float = Form(3.0),
 ) -> JSONResponse:
     """診斷：回傳指定頁（1-based）的原始 OCR 偵測（文字＋座標＋信心度）。
 
@@ -686,7 +687,7 @@ async def debug_ocr(
         tmp.write(data)
         tmp_path = tmp.name
     try:
-        dets = ocr_page_boxes(tmp_path, page - 1)
+        dets = ocr_page_boxes(tmp_path, page - 1, zoom=max(1.0, min(zoom, 8.0)))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"OCR 失敗：{exc}")
     finally:
