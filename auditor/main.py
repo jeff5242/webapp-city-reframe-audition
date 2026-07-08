@@ -388,6 +388,16 @@ def _run_audit_sync(
         )
         reg_version, fill_date_iso = select_version(version_date)
 
+        # 權利變換計畫書 報核日期分列（可能與事業計畫書不同天）。
+        # 目前僅擷取主文件的審議資料表；次文件先以檔名日期呈現，清楚標註來源。
+        report_date_secondary: Optional[str] = None
+        report_date_secondary_source: Optional[str] = None
+        if re_path is not None:
+            secondary_fname_date = _date_from_filename(re_fname or "")
+            if secondary_fname_date:
+                report_date_secondary = secondary_fname_date
+                report_date_secondary_source = "檔名日期（自動辨識）"
+
         case_name = (
             review_table.case_name if review_table and review_table.case_name else bp_fname
         )
@@ -537,6 +547,8 @@ def _run_audit_sync(
             report_date=version_date,
             report_date_source=rd_source,
             report_date_page=rd_page,
+            report_date_secondary=report_date_secondary,
+            report_date_secondary_source=report_date_secondary_source,
             diffs=diffs,
             prev_audit_time=prev_audit_time,
             annotated_pdf_key=annotated_key,

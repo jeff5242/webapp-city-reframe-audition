@@ -24,7 +24,8 @@ def _rt(**overrides):
 
 def _report(findings, annotated_pdf_key=None, review_table=None,
             report_date=None, report_date_source=None, report_date_page=None,
-            evidence_images=None):
+            evidence_images=None, report_date_secondary=None,
+            report_date_secondary_source=None):
     return AuditReport(
         case_name="測試案",
         audit_time="2026-07-06 10:00",
@@ -40,6 +41,8 @@ def _report(findings, annotated_pdf_key=None, review_table=None,
         report_date=report_date,
         report_date_source=report_date_source,
         report_date_page=report_date_page,
+        report_date_secondary=report_date_secondary,
+        report_date_secondary_source=report_date_secondary_source,
     )
 
 
@@ -197,6 +200,28 @@ def test_key_numbers_lists_review_table_values_with_source_page():
     assert by_label["法定停車位"]["value"] == "58 輛"
     assert by_label["報核日期"]["value"] == "112年12月26日"
     assert by_label["報核日期"]["page"] == 11
+
+
+def test_report_date_single_row_without_secondary():
+    rows = key_numbers(_report([], review_table=_rt(), report_date="112年12月26日"))
+    labels = [r["label"] for r in rows]
+    assert "報核日期" in labels
+    assert "事業計畫書 報核日期" not in labels
+
+
+def test_report_dates_split_when_secondary_present():
+    rows = key_numbers(_report(
+        [], review_table=_rt(), report_date="112年12月26日",
+        report_date_source="審議資料表（辦理過程報核日）", report_date_page=11,
+        report_date_secondary="113年5月13日",
+        report_date_secondary_source="檔名日期（自動辨識）",
+    ))
+    by_label = {r["label"]: r for r in rows}
+    assert by_label["事業計畫書 報核日期"]["value"] == "112年12月26日"
+    assert by_label["權利變換計畫書 報核日期"]["value"] == "113年5月13日"
+    assert by_label["權利變換計畫書 報核日期"]["source"] == "檔名日期（自動辨識）"
+    # 單一「報核日期」不再出現（已分列）
+    assert "報核日期" not in by_label
 
 
 def test_key_numbers_flags_missing_fields():

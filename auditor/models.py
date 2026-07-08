@@ -141,6 +141,9 @@ class AuditReport:
     report_date: Optional[str] = None         # 報核日期 ROC string
     report_date_source: Optional[str] = None  # "申請書", "切結書", "委託書", or "審議資料表（填表日期）"
     report_date_page: Optional[int] = None
+    # ①b 權利變換計畫書 報核日期（可能與事業計畫書不同天，故分列）
+    report_date_secondary: Optional[str] = None
+    report_date_secondary_source: Optional[str] = None
     # ② 版次差異比對
     diffs: List[FindingDiff] = field(default_factory=list)
     prev_audit_time: Optional[str] = None

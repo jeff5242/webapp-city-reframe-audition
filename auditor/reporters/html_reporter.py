@@ -55,14 +55,25 @@ def key_numbers(report: AuditReport) -> List[dict]:
     page = rt.raw_page if rt else None
     rows: List[dict] = []
 
-    # 報核日期（來源可能是審議資料表/申請書…，頁碼獨立）
+    # 報核日期（來源可能是審議資料表/申請書…，頁碼獨立）。兩份文件的報核日可能
+    # 不同天，故有次文件時分列「事業計畫書」與「權利變換計畫書」兩筆。
+    has_secondary = report.report_date_secondary is not None
+    primary_label = "事業計畫書 報核日期" if has_secondary else "報核日期"
     rows.append({
-        "label": "報核日期",
+        "label": primary_label,
         "value": report.report_date,
         "source": report.report_date_source or "—",
         "page": report.report_date_page,
         "missing": report.report_date is None,
     })
+    if has_secondary:
+        rows.append({
+            "label": "權利變換計畫書 報核日期",
+            "value": report.report_date_secondary,
+            "source": report.report_date_secondary_source or "—",
+            "page": None,
+            "missing": report.report_date_secondary is None,
+        })
 
     if rt is not None:
         specs = [
