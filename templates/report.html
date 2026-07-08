@@ -196,6 +196,8 @@
         </div>
       </div>
     </div>
+    {# 同一問題頁的標註截圖只內嵌一次（多條 finding 指同頁時避免重複塞 base64 撐爆報告） #}
+    {% set shown_pages = namespace(ids=[]) %}
     <div class="divide-y divide-gray-100">
       {% for finding in sorted_findings %}
       {% set status_config = {
@@ -263,7 +265,8 @@
             </p>
             {# 問題頁標註截圖（副總 UX）：紅框預覽直接內嵌，零點擊即見問題位置；
                點圖在新頁開啟完整標註 PDF 並跳至該頁。無截圖時自動略過，只留文字連結。 #}
-            {% if ev_page and report.evidence_images and report.evidence_images.get(ev_page) %}
+            {% if ev_page and report.evidence_images and report.evidence_images.get(ev_page) and ev_page not in shown_pages.ids %}
+            {% set shown_pages.ids = shown_pages.ids + [ev_page] %}
             <div class="ml-7 mt-2 no-print">
               <a
                 href="/download/{{ report.annotated_pdf_key }}#page={{ ev_page }}"

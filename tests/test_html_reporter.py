@@ -126,6 +126,23 @@ def test_no_thumbnail_when_page_not_in_images():
     assert "看標註第 11 頁" in html
 
 
+def test_same_page_thumbnail_embedded_only_once():
+    # 兩條 finding 都指第 11 頁 → 圖只內嵌一次，避免重複塞 base64 撐爆報告
+    findings = [
+        Finding("CALC-001", "容積獎勵", "fail", "critical", "超上限",
+                evidence="審議資料表第 11 頁"),
+        Finding("CALC-004", "上限驗算", "fail", "high", "不符",
+                evidence="審議資料表第 11 頁"),
+    ]
+    html = generate_report(_report(
+        findings, annotated_pdf_key="abcd1234",
+        evidence_images={11: "data:image/jpeg;base64,Zm9v"},
+    ))
+    assert html.count("data:image/jpeg;base64,Zm9v") == 1
+    # 兩條的文字頁碼跳轉都仍在
+    assert html.count("看標註第 11 頁") == 2
+
+
 def test_no_thumbnail_without_evidence_images():
     f = Finding(
         rule_id="CALC-001", rule_name="容積獎勵", status="fail", severity="critical",
