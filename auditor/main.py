@@ -10,7 +10,10 @@ import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+# 臺北時區（UTC+8，全年無日光節約）——容器預設 UTC，審查時間須以台北時間呈現。
+_TAIPEI_TZ = timezone(timedelta(hours=8))
 from pathlib import Path
 from typing import List, Optional
 
@@ -401,7 +404,7 @@ def _run_audit_sync(
         case_name = (
             review_table.case_name if review_table and review_table.case_name else bp_fname
         )
-        audit_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        audit_time = datetime.now(_TAIPEI_TZ).strftime("%Y-%m-%d %H:%M")
 
         # Diff
         diffs: list[FindingDiff] = []
@@ -661,6 +664,48 @@ async def download_annotated(key: str, dl: int = 0) -> Response:
         media_type="application/pdf",
         headers={"Content-Disposition": f'{disposition}; filename="annotated_{key}.pdf"'},
     )
+
+
+@app.post("/debug/ocr")
+async def debug_ocr(
+    pdf: UploadFile = File(...),
+    page: int = Form(...),
+) -> JSONResponse:
+    """診斷：回傳指定頁（1-based）的原始 OCR 偵測（文字＋座標＋信心度）。
+
+    用來查明審議資料表某欄位為何擷取錯誤／未擷取——例如「1,406.00」被 PaddleOCR
+    切成幾個 token、座標如何，才能對症調整幾何重建。純地端 OCR，無外部呼叫。
+    """
+    if not (pdf.filename or "").lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="僅支援 PDF")
+    from .parsers.ocr_reader import ocr_available, ocr_page_boxes
+    if not ocr_available():
+        raise HTTPException(status_code=503, detail="OCR 未安裝（PaddleOCR 不可用）")
+    data = await pdf.read()
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(data)
+        tmp_path = tmp.name
+    try:
+        dets = ocr_page_boxes(tmp_path, page - 1)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"OCR 失敗：{exc}")
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+    out = [
+        {
+            "text": d.get("text"),
+            "conf": round(d.get("conf", 0.0), 3),
+            "x0": round(d.get("x0", 0.0), 1),
+            "x1": round(d.get("x1", 0.0), 1),
+            "yc": round(d.get("yc", 0.0), 1),
+            "h": round(d.get("h", 0.0), 1),
+        }
+        for d in dets[:800]
+    ]
+    return JSONResponse({"page": page, "count": len(dets), "detections": out})
 
 
 @app.post("/audit")
