@@ -275,3 +275,29 @@ def test_base_floor_area_plain_label_still_matches():
         _det("2,812.00", 110, 200, 50),
     ]
     assert reconstruct_fields(dets)["base_floor_area"] == 2812.00
+
+
+def test_actual_parking_sums_four_categories_with_detail():
+    # 實設汽車 = 平面26+機械45+無障礙2+充電0 = 73（大魯閣），並附分項明細
+    dets = [
+        _det("實設汽車停車位", 0, 200, 100),
+        _det("平面", 210, 260, 90), _det("26輛", 300, 380, 90),
+        _det("機械", 210, 260, 140), _det("45輛", 300, 380, 140),
+        _det("法定無障礙汽車停車位", 0, 300, 50), _det("2輛", 320, 380, 50),
+    ]
+    out = reconstruct_fields(dets)
+    assert out["actual_parking"] == 73
+    assert out["actual_parking_detail"] == "平面26機械45無障礙2充電-"
+
+
+def test_actual_parking_charge_counted_when_present():
+    dets = [
+        _det("實設汽車停車位", 0, 200, 100),
+        _det("平面", 210, 260, 90), _det("20輛", 300, 380, 90),
+        _det("機械", 210, 260, 140), _det("10輛", 300, 380, 140),
+        _det("充電車位", 0, 200, 200), _det("3輛", 300, 380, 200),
+    ]
+    out = reconstruct_fields(dets)
+    # 平面20+機械10+無障礙0+充電3 = 33
+    assert out["actual_parking"] == 33
+    assert "充電3" in out["actual_parking_detail"]

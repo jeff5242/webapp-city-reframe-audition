@@ -116,11 +116,11 @@ def _int_value_right(label: dict, dets: List[dict]) -> Optional[int]:
     return None
 
 
-def _sum_actual_parking(dets: List[dict]) -> Optional[int]:
-    """實設汽車停車位總數 = 平面 + 機械。需同時取到兩子項且頁面有「實設」錨點才回傳，
-    否則 None（不猜）。避免把不相關的『平面/機械』字樣誤當停車位。"""
+def _surface_mech(dets: List[dict]) -> tuple:
+    """實設汽車停車位的 平面 / 機械 子項值。需頁面有「實設」錨點，避免誤配。
+    回傳 (平面, 機械)，取不到者為 None。"""
     if not any("實設" in (d.get("text") or "") for d in dets):
-        return None
+        return None, None
     surface = mech = None
     for d in dets:
         text = (d.get("text") or "").strip()
@@ -128,9 +128,7 @@ def _sum_actual_parking(dets: List[dict]) -> Optional[int]:
             surface = _int_value_right(d, dets)
         if mech is None and "機械" in text:
             mech = _int_value_right(d, dets)
-    if surface is not None and mech is not None:
-        return surface + mech
-    return None
+    return surface, mech
 
 
 def _checked_code(text: str) -> Optional[str]:
@@ -201,10 +199,18 @@ def reconstruct_fields(dets: List[dict]) -> Dict[str, object]:
                     result[field] = value
                 break
 
-    # 實設汽車停車位：平面+機械 加總（優先於主迴圈可能抓到的單一子格值）。
-    total = _sum_actual_parking(geo_dets)
-    if total is not None:
-        result["actual_parking"] = total
+    # 實設汽車停車位 = 平面 + 機械 + 無障礙 + 充電（依審議慣例四項相加；充電空白計 0）。
+    # 優先於主迴圈可能抓到的單一子格值；並附分項明細供報告呈現。
+    surface, mech = _surface_mech(geo_dets)
+    if surface is not None and mech is not None:
+        acc = result.get("accessible_parking") or 0
+        ev = result.get("ev_parking")
+        charge = ev or 0
+        result["actual_parking"] = surface + mech + acc + charge
+        ev_disp = str(ev) if ev is not None else "-"
+        result["actual_parking_detail"] = (
+            f"平面{surface}機械{mech}無障礙{acc}充電{ev_disp}"
+        )
 
     if submission_type:
         result["submission_type"] = submission_type

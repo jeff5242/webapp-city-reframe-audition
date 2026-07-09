@@ -197,7 +197,7 @@ def test_key_numbers_lists_review_table_values_with_source_page():
     assert by_label["容積獎勵申請額度"]["value"] == "1,928.58 m²"
     assert by_label["容積獎勵申請額度"]["page"] == 11
     assert by_label["容積獎勵申請額度"]["source"] == "審議資料表"
-    assert by_label["法定停車位"]["value"] == "58 輛"
+    assert by_label["法定(含無障礙)汽車停車位"]["value"] == "58 輛"
     assert by_label["報核日期"]["value"] == "112年12月26日"
     assert by_label["報核日期"]["page"] == 11
 

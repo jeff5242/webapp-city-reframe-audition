@@ -76,12 +76,16 @@ def key_numbers(report: AuditReport) -> List[dict]:
         })
 
     if rt is not None:
+        # 實設汽車停車位：值後附分項明細（平面/機械/無障礙/充電），對齊審議資料表用字。
+        actual_val = _fmt_count(rt.actual_parking)
+        if actual_val and rt.actual_parking_detail:
+            actual_val = f"{actual_val}（{rt.actual_parking_detail}）"
         specs = [
             ("基準容積", _fmt_area(rt.base_floor_area), rt.base_floor_area is None),
             ("容積獎勵申請額度", _fmt_area(rt.bonus_floor_area), rt.bonus_floor_area is None),
             ("容積獎勵上限", _fmt_area(rt.bonus_limit), rt.bonus_limit is None),
-            ("法定停車位", _fmt_count(rt.legal_parking), rt.legal_parking is None),
-            ("實設停車位", _fmt_count(rt.actual_parking), rt.actual_parking is None),
+            ("法定(含無障礙)汽車停車位", _fmt_count(rt.legal_parking), rt.legal_parking is None),
+            ("實設汽車停車位", actual_val, rt.actual_parking is None),
             ("無障礙停車位", _fmt_count(rt.accessible_parking), rt.accessible_parking is None),
             ("充電車位", _fmt_count(rt.ev_parking), rt.ev_parking is None),
         ]
