@@ -9,7 +9,7 @@ _BONUS_LIMIT_TOLERANCE = 2.0  # 容許計算誤差（m²）
 
 class ActualParkingRule(Rule):
     rule_id = "CALC-003"
-    rule_name = "實設停車位不低於法定要求"
+    rule_name = "實設汽車停車位不低於法定要求"
     severity = "critical"
     reference = "建築技術規則第59條"
 
@@ -19,16 +19,16 @@ class ActualParkingRule(Rule):
             return self._skip("審議資料表未能解析")
 
         if rt.actual_parking is None or rt.legal_parking is None:
-            return self._warn("實設或法定停車位資料不足，建議人工確認")
+            return self._warn("實設或法定(含無障礙)汽車停車位資料不足，建議人工確認")
 
         evidence = f"審議資料表第 {rt.raw_page} 頁"
         applied = f"實設汽車停車位 {rt.actual_parking} 輛"
-        expected = f"法定汽車停車位 {rt.legal_parking} 輛（建築技術規則第59條）"
+        expected = f"法定(含無障礙)汽車停車位 {rt.legal_parking} 輛（建築技術規則第59條）"
 
         if rt.actual_parking < rt.legal_parking:
             short = rt.legal_parking - rt.actual_parking
             return self._fail(
-                f"實設停車位 {rt.actual_parking} 輛低於法定要求 {rt.legal_parking} 輛，"
+                f"實設汽車停車位 {rt.actual_parking} 輛低於法定要求 {rt.legal_parking} 輛，"
                 f"差距 {short} 輛",
                 evidence=evidence,
                 applied_value=applied,

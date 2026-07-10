@@ -124,7 +124,7 @@ class AccessibleParkingRule(Rule):
             )
             if accessible < required:
                 return self._fail(
-                    f"法定停車位 {legal} 輛，依建築技術規則應設 {required} 輛無障礙停車位，"
+                    f"法定(含無障礙)汽車停車位 {legal} 輛，依建築技術規則應設 {required} 輛無障礙停車位，"
                     f"但填寫為 {accessible} 輛",
                     evidence=evidence,
                     applied_value=applied,

@@ -32,7 +32,7 @@ class NumberConsistencyRule(Rule):
 
     _LABEL = {
         "accessible_parking": "無障礙停車位",
-        "legal_parking": "法定停車位",
+        "legal_parking": "法定(含無障礙)汽車停車位",
         "bonus_floor_area": "容積獎勵面積",
         "ev_parking": "充電車位",
     }

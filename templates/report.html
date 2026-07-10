@@ -462,7 +462,8 @@
         {{ row('容積獎勵申請額度', (rt.bonus_floor_area | round(2) | string + ' m²') if rt.bonus_floor_area is not none else None,
                highlight=(rt.bonus_floor_area and rt.bonus_limit and rt.bonus_floor_area > rt.bonus_limit)) }}
         {{ row('容積獎勵上限', (rt.bonus_limit | round(2) | string + ' m²') if rt.bonus_limit is not none else None) }}
-        {{ row('法定停車位', (rt.legal_parking | string + ' 輛') if rt.legal_parking is not none else None) }}
+        {{ row('法定(含無障礙)汽車停車位', (rt.legal_parking | string + ' 輛') if rt.legal_parking is not none else None) }}
+        {{ row('實設汽車停車位', ((rt.actual_parking | string) + ' 輛' + ('（' + rt.actual_parking_detail + '）' if rt.actual_parking_detail else '')) if rt.actual_parking is not none else None) }}
         {{ row('無障礙停車位', (rt.accessible_parking | string + ' 輛') if rt.accessible_parking is not none else None,
                highlight=(rt.legal_parking is not none and rt.legal_parking <= 50 and rt.accessible_parking is not none and rt.accessible_parking < 1)) }}
         {{ row('充電車位', (rt.ev_parking | string + ' 輛') if rt.ev_parking is not none else None) }}
