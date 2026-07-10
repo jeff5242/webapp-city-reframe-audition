@@ -36,9 +36,11 @@ from .s3 import (
     generate_download_url,
     generate_upload_url,
     list_cases,
+    load_labels,
     s3_available,
     save_annotated_pdf,
     save_case_meta,
+    save_labels,
     setup_bucket_encryption,
 )
 from .wiki import load_all_wiki
@@ -657,6 +659,50 @@ async def download_annotated(meta_id: str) -> JSONResponse:
 async def wiki_page(request: Request) -> HTMLResponse:
     data = load_all_wiki()
     return templates.TemplateResponse(request, "wiki.html", {"wiki": data})
+
+
+# ── 審議資料表標註工具（供驗收人員核對訓練樣本）──────────────────────────────
+_LABEL_TOOL_PATH = Path(__file__).parent.parent / "審議資料表_訓練標註" / "標註工具.html"
+_LABELS_MEM: Optional[dict] = None  # S3 未設定時的暫存（重新部署會消失）
+
+
+@app.get("/label", response_class=HTMLResponse)
+async def label_tool() -> Response:
+    """單一自足 HTML 標註工具（內嵌 14 張圖）。"""
+    if not _LABEL_TOOL_PATH.exists():
+        raise HTTPException(status_code=404, detail="標註工具尚未產生")
+    return HTMLResponse(_LABEL_TOOL_PATH.read_text(encoding="utf-8"))
+
+
+@app.post("/label/submit")
+async def label_submit(request: Request) -> JSONResponse:
+    """接收驗收人員修正後的標註，存 S3（或記憶體暫存）供承辦收回。"""
+    global _LABELS_MEM
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="請提供 JSON")
+    _LABELS_MEM = data
+    stored = "memory"
+    if s3_available():
+        try:
+            save_labels(data)
+            stored = "s3"
+        except Exception:
+            log.exception("標註存 S3 失敗（已留記憶體暫存）")
+    return JSONResponse({"ok": True, "stored": stored,
+                         "reviewed": data.get("reviewed"), "total": data.get("total")})
+
+
+@app.get("/label/submissions")
+async def label_submissions() -> JSONResponse:
+    """收回最新提交的標註（承辦／訓練用）。"""
+    data = load_labels() if s3_available() else None
+    if data is None:
+        data = _LABELS_MEM
+    if data is None:
+        raise HTTPException(status_code=404, detail="尚無提交的標註")
+    return JSONResponse(data)
 
 
 @app.get("/download/{key}")

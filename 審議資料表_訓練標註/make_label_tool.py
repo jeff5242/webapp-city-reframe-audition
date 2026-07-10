@@ -87,7 +87,8 @@ kbd{font-size:11px;background:var(--surface2);border:1px solid var(--line);borde
   <div class="bar">
     <span style="font-size:11px;color:var(--faint)">已改 <b id="revcount">0</b>/__N__</span>
     <button onclick="resetOne()">還原此張</button>
-    <button class="primary" onclick="exportJSON()">⬇ 匯出標註 JSON</button>
+    <button onclick="exportJSON()">⬇ 匯出 JSON</button>
+    <button class="primary" onclick="submitServer()">☁ 提交到伺服器</button>
   </div>
 </header>
 <main>
@@ -150,12 +151,21 @@ function go(dir){ cur=Math.max(0,Math.min(N-1,cur+dir)); render(); document.quer
 function jump(i){ cur=+i; render(); }
 function setZoom(v){ document.getElementById('img').style.width=v+'%'; document.getElementById('zoomval').textContent=v+'%'; }
 function resetOne(){ const id=DATA[cur].id; delete store[id]; localStorage.setItem(LS,JSON.stringify(store)); render(); }
+function collect(){ return DATA.map(d=>({image:d.image||d.name, name:d.name, meta:d.meta,
+    fields: curFields(d.id), reviewed: isRev(d.id)})); }
 function exportJSON(){
-  const out = DATA.map(d=>({image:d.image||d.name, name:d.name, meta:d.meta,
-    fields: curFields(d.id), reviewed: isRev(d.id)}));
-  const blob = new Blob([JSON.stringify(out,null,2)],{type:"application/json"});
+  const blob = new Blob([JSON.stringify(collect(),null,2)],{type:"application/json"});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download="審議資料表_標註_已修正.json"; a.click();
+}
+async function submitServer(){
+  const nrev = collect().filter(x=>x.reviewed).length;
+  if(!confirm('提交到伺服器？目前已核對 '+nrev+'/'+N+' 張。承辦可從伺服器收回。')) return;
+  try{
+    const r = await fetch('/label/submit',{method:'POST',headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({submitted_at:new Date().toISOString(), reviewed:nrev, total:N, samples:collect()})});
+    alert(r.ok ? '✓ 已提交到伺服器（已核對 '+nrev+'/'+N+'）' : '提交失敗：HTTP '+r.status);
+  }catch(e){ alert('提交失敗：'+e+'\\n（可改用「⬇匯出 JSON」下載後回傳）'); }
 }
 document.addEventListener('keydown',e=>{ if(e.target.tagName==='INPUT')return;
   if(e.key==='ArrowLeft')go(-1); if(e.key==='ArrowRight')go(1); });

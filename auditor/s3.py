@@ -149,6 +149,34 @@ def save_annotated_pdf(meta_id: str, pdf_bytes: bytes) -> str:
     return key
 
 
+_LABELS_KEY = "annotations/labels_latest.json"
+
+
+def save_labels(data: dict) -> str:
+    """Persist submitted 審議資料表 annotations to S3 (AES-256). Returns the key."""
+    import json
+
+    _client().put_object(
+        Bucket=_BUCKET,
+        Key=_LABELS_KEY,
+        Body=json.dumps(data, ensure_ascii=False).encode("utf-8"),
+        ContentType="application/json",
+        ServerSideEncryption="AES256",
+    )
+    return _LABELS_KEY
+
+
+def load_labels() -> Optional[dict]:
+    """Read the latest submitted annotations from S3; None if absent."""
+    import json
+
+    try:
+        obj = _client().get_object(Bucket=_BUCKET, Key=_LABELS_KEY)
+        return json.loads(obj["Body"].read())
+    except Exception:
+        return None
+
+
 def generate_download_url(key: str, filename: str) -> str:
     """Return a presigned GET URL valid for 1 hour."""
     return _client().generate_presigned_url(
