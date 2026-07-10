@@ -225,10 +225,19 @@ def test_report_dates_split_when_secondary_present():
 
 
 def test_key_numbers_flags_missing_fields():
-    rows = key_numbers(_report([], review_table=_rt(bonus_limit=None)))
+    # 無上限「且無基準容積」→ 真的缺、標記待補
+    rows = key_numbers(_report([], review_table=_rt(bonus_limit=None, base_floor_area=None)))
     limit = next(r for r in rows if r["label"] == "容積獎勵上限")
     assert limit["missing"] is True
     assert limit["value"] is None
+
+
+def test_key_numbers_derives_limit_from_base():
+    # 無明列上限但有基準容積 → 上限 = 基準×50%（標「推算」）
+    rows = key_numbers(_report([], review_table=_rt(bonus_limit=None, base_floor_area=2812.0)))
+    limit = next(r for r in rows if r["label"] == "容積獎勵上限")
+    assert limit["missing"] is False
+    assert "1,406.00" in limit["value"] and "推算" in limit["value"]
 
 
 def test_key_numbers_without_review_table_still_lists_report_date():

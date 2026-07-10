@@ -551,3 +551,49 @@ def ocr_page_boxes(pdf_path: str, page_index: int, zoom: float = 3.0) -> list[di
     except Exception as exc:
         logger.warning("OCR boxes failed for page index %d: %s", page_index, exc)
         return []
+
+
+def ocr_regions(
+    pdf_path: str,
+    page_index: int,
+    regions: dict,
+    zoom: float = 4.0,
+) -> dict:
+    """OCR 指定的正規化區域（模板錨定用）。
+
+    regions = {field: (x0, y0, x1, y1)}，座標為 0~1 正規化。以 PaddleOCR 逐區裁切
+    單獨辨識（小塊乾淨、比密表全頁準）。回傳 {field: 該區 OCR 文字}；OCR 不可用或
+    失敗回 {}。
+    """
+    if not _FITZ_OK:
+        return {}
+    reader = _get_reader()
+    if reader is None:
+        return {}
+    try:
+        import numpy as np
+        from PIL import Image
+
+        doc = _fitz.open(pdf_path)
+        try:
+            if page_index >= len(doc):
+                return {}
+            pix = doc[page_index].get_pixmap(matrix=_fitz.Matrix(zoom, zoom))
+        finally:
+            doc.close()
+
+        img = np.array(Image.open(io.BytesIO(pix.tobytes("png"))))
+        H, W = img.shape[:2]
+        out: dict = {}
+        for field, (x0, y0, x1, y1) in regions.items():
+            crop = img[int(y0 * H): int(y1 * H), int(x0 * W): int(x1 * W)]
+            if crop.size == 0:
+                continue
+            with _INFER_LOCK:
+                result = reader.ocr(crop, cls=True)
+            dets = _detections_from_result(result[0] if result else None)
+            out[field] = " ".join(d.get("text", "") for d in dets)
+        return out
+    except Exception as exc:
+        logger.warning("ocr_regions failed for page index %d: %s", page_index, exc)
+        return {}

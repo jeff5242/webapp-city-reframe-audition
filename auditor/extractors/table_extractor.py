@@ -413,6 +413,17 @@ def _reconstruct_via_bbox(pdf_path: str, page_num: int) -> Dict[str, object]:
         return {}
 
 
+def _extract_via_template(pdf_path: str, page_num: int,
+                          known_bonus: Optional[float]) -> Dict[str, object]:
+    """Track-A 模板錨定：裁固定欄位區單獨 OCR 補基準容積（對齊驗證防誤填）。"""
+    try:
+        from .template_anchor import extract_base_floor_area
+        return extract_base_floor_area(pdf_path, page_num, known_bonus)
+    except Exception as exc:
+        log.warning("template anchor failed (non-fatal): %s", exc)
+        return {}
+
+
 # ── orchestration ─────────────────────────────────────────────────────────────
 
 def enhance_review_table(
@@ -444,6 +455,12 @@ def enhance_review_table(
     if _coverage(current) < 1.0:
         geo = _reconstruct_via_bbox(pdf_path, page_num)
         merged = _merge_into(merged, geo)
+
+    # Tier 2b — 模板錨定補基準容積（全頁 OCR 常讀不到「基準容積」標籤）。
+    # 對齊驗證：模板抓的獎勵樓地板需與已知值相符才採信，故只對標準版面生效、不誤填。
+    if merged.base_floor_area is None:
+        tmpl = _extract_via_template(pdf_path, page_num, merged.bonus_floor_area)
+        merged = _merge_into(merged, tmpl)
 
     # Tier 3 — cloud vision escalation (needs API key; off in sovereign mode).
     current = {f: getattr(merged, f) for f in _CRITICAL_FIELDS}

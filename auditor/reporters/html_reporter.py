@@ -80,10 +80,16 @@ def key_numbers(report: AuditReport) -> List[dict]:
         actual_val = _fmt_count(rt.actual_parking)
         if actual_val and rt.actual_parking_detail:
             actual_val = f"{actual_val}（{rt.actual_parking_detail}）"
+        # 容積獎勵上限：表列值優先；無表列值但有基準容積時，依都更條例§65 推算=基準×50%。
+        limit_val = _fmt_area(rt.bonus_limit)
+        limit_missing = rt.bonus_limit is None
+        if limit_missing and rt.base_floor_area is not None:
+            limit_val = f"{rt.base_floor_area * 0.5:,.2f} m²（依基準×50%推算）"
+            limit_missing = False
         specs = [
             ("基準容積", _fmt_area(rt.base_floor_area), rt.base_floor_area is None),
             ("容積獎勵申請額度", _fmt_area(rt.bonus_floor_area), rt.bonus_floor_area is None),
-            ("容積獎勵上限", _fmt_area(rt.bonus_limit), rt.bonus_limit is None),
+            ("容積獎勵上限", limit_val, limit_missing),
             ("法定(含無障礙)汽車停車位", _fmt_count(rt.legal_parking), rt.legal_parking is None),
             ("實設汽車停車位", actual_val, rt.actual_parking is None),
             ("無障礙停車位", _fmt_count(rt.accessible_parking), rt.accessible_parking is None),

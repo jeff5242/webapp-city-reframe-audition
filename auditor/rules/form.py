@@ -58,7 +58,12 @@ class BonusFloorAreaLimitRule(Rule):
         if rt is None:
             return self._skip("審議資料表未能解析")
 
-        if rt.bonus_floor_area is None or rt.bonus_limit is None:
+        # 上限：表列值優先；無表列值但有基準容積時，依§65 推算 上限 = 基準 × 50%
+        # （多數審議資料表無明列「上限」欄，靠此讓 CALC-001 仍可核）。
+        limit = rt.bonus_limit
+        if limit is None and rt.base_floor_area is not None:
+            limit = rt.base_floor_area * 0.5
+        if rt.bonus_floor_area is None or limit is None:
             return self._warn(
                 "容積獎勵申請額度或上限無法從審議資料表解析，請人工核對",
                 evidence=f"審議資料表第 {rt.raw_page} 頁",
@@ -66,19 +71,20 @@ class BonusFloorAreaLimitRule(Rule):
 
         # 容積獎勵比率 = 獎勵樓地板 ÷ 基準容積（非 ÷ 上限）。
         # 基準缺漏時依「上限 = 基準 × 50%」推回 基準 = 上限 × 2。
-        base = rt.base_floor_area or (rt.bonus_limit * 2)
+        base = rt.base_floor_area or (limit * 2)
         evidence = f"審議資料表第 {rt.raw_page} 頁"
         applied = f"獎勵樓地板面積 {rt.bonus_floor_area:,.2f} m²"
+        _limit_note = "" if rt.bonus_limit is not None else "（依基準×50%推算）"
         expected = (
-            f"基準容積 {base:,.2f} × 50% = 上限 {rt.bonus_limit:,.2f} m²"
+            f"基準容積 {base:,.2f} × 50% = 上限 {limit:,.2f} m²{_limit_note}"
             "（都更條例第65條）"
         )
         ratio = rt.bonus_floor_area / base * 100 if base > 0 else 0
 
-        if rt.bonus_floor_area > rt.bonus_limit + 0.1:
-            diff = rt.bonus_floor_area - rt.bonus_limit
+        if rt.bonus_floor_area > limit + 0.1:
+            diff = rt.bonus_floor_area - limit
             return self._fail(
-                f"申請額 {rt.bonus_floor_area:,.2f}m² 超過上限 {rt.bonus_limit:,.2f}m²"
+                f"申請額 {rt.bonus_floor_area:,.2f}m² 超過上限 {limit:,.2f}m²"
                 f"，差距 {diff:,.2f}m²，獎勵比率 {ratio:.1f}%",
                 evidence=evidence,
                 applied_value=applied,
@@ -87,7 +93,7 @@ class BonusFloorAreaLimitRule(Rule):
             )
 
         return self._pass(
-            f"容積獎勵 {rt.bonus_floor_area:,.2f}m² ≤ 上限 {rt.bonus_limit:,.2f}m²",
+            f"容積獎勵 {rt.bonus_floor_area:,.2f}m² ≤ 上限 {limit:,.2f}m²",
             evidence=evidence,
             applied_value=applied,
             expected_calc=expected,

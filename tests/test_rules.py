@@ -184,6 +184,26 @@ class TestFillDateRule:
 
 
 class TestBonusFloorAreaLimitRule:
+    def test_derives_limit_from_base_when_no_explicit_limit(self):
+        # 表無明列上限，但有基準容積 → 上限=基準×50%，仍可核（大魯閣）
+        f = BonusFloorAreaLimitRule().evaluate(
+            _make_data(base_floor_area=2812.0, bonus_floor_area=1406.0, bonus_limit=None)
+        )
+        assert f.status == "pass"
+        assert "推算" in (f.expected_calc or "")
+
+    def test_derived_limit_can_fail(self):
+        f = BonusFloorAreaLimitRule().evaluate(
+            _make_data(base_floor_area=2812.0, bonus_floor_area=1500.0, bonus_limit=None)
+        )
+        assert f.status == "fail"
+
+    def test_warn_when_no_limit_and_no_base(self):
+        f = BonusFloorAreaLimitRule().evaluate(
+            _make_data(base_floor_area=None, bonus_floor_area=1406.0, bonus_limit=None)
+        )
+        assert f.status == "warn"
+
     def test_pass_when_within_limit(self):
         finding = BonusFloorAreaLimitRule().evaluate(
             _make_data(bonus_floor_area=1877.63, bonus_limit=1877.63)
