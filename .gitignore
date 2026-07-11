@@ -21,3 +21,12 @@ demo_report_*.html
 .env
 .env.local
 VERSION
+
+# 低解析標註（含 PII，已從歷史清除，本機保留供 /label 與標註用）
+審議資料表_訓練標註/標註工具.html
+審議資料表_訓練標註/manifest.json
+審議資料表_訓練標註/??_*.json
+
+# 訓練用原始資料 + 高解析輸出（含地號/姓名/印鑑 PII，不進版控）
+審議資料表PDF圖檔轉PNG for OCR訓練/
+審議資料表_訓練標註/高解析標註/
