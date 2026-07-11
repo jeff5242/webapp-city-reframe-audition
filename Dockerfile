@@ -46,9 +46,9 @@ RUN apt-get update \
 # oneDNN 在 paddle-3.0 CPU 有 op bug（strides/ConvertPirAttribute）→ 全程關閉。
 ENV FLAGS_use_mkldnn=0
 
-# Pre-download PP-OCRv5 models so container startup is fast (no internet needed at runtime).
-# paddleocr 3.x API：predict()、預設統一 rec（繁簡通用）；不傳 lang。
-RUN python3 -c "from paddleocr import PaddleOCR; PaddleOCR(use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False)" || true
+# Pre-download PP-OCRv5+ models so container startup is fast (no internet needed at runtime).
+# paddleocr 3.x API：predict()、預設統一 rec（繁簡通用）；不傳 lang；enable_mkldnn=False。
+RUN python3 -c "from paddleocr import PaddleOCR; PaddleOCR(use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False, enable_mkldnn=False)" || true
 
 # Copy source (after deps so source changes don't bust dep cache)
 COPY . .

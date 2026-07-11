@@ -42,9 +42,10 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# PP-OCRv5（paddle 3.x）在 CPU 上的 oneDNN 後端有 op bug（macOS: pir strides Int32；
-# Linux: onednn ConvertPirAttribute）。必須關閉 mkldnn 才能在 CPU 推論，且須在
-# import paddle 之前設定環境變數。
+# paddle 3.x 在 CPU 上的 oneDNN 後端有 op bug（macOS: pir strides Int32；
+# Linux: onednn ConvertPirAttribute）。實測真正關掉 oneDNN 的是 PaddleOCR 的
+# enable_mkldnn=False 建構參數（見 _get_reader）；此 env 僅作舊版 fluid executor
+# 的保險（新版 PIR executor 不讀它）。
 os.environ.setdefault("FLAGS_use_mkldnn", "0")
 
 # ---------------------------------------------------------------------------
@@ -383,15 +384,23 @@ def _get_reader():
             return _paddle_reader
         try:
             from paddleocr import PaddleOCR
-            # PP-OCRv5 預設統一 rec 模型（繁簡通用，數值辨識明顯優於舊 chinese_cht）。
-            # 不傳 lang（用預設 v5，非弱項的 cht 專用模型）；簡體洩漏交給 OpenCC 後處理。
-            _paddle_reader = PaddleOCR(
+            # 預設統一 rec 模型（PP-OCRv5/v6，繁簡通用，數值辨識明顯優於舊 chinese_cht）。
+            # 不傳 lang（用預設，非弱項的 cht 專用模型）；簡體洩漏交給 OpenCC 後處理。
+            # enable_mkldnn=False 才是真正關掉 oneDNN 的方法：新版 paddle 的 predict
+            # 走 PIR executor，全域 env FLAGS_use_mkldnn 對它無效，需靠此建構參數。
+            _kwargs = dict(
                 use_doc_orientation_classify=False,
                 use_doc_unwarping=False,
                 use_textline_orientation=False,
+                enable_mkldnn=False,
             )
+            try:
+                _paddle_reader = PaddleOCR(**_kwargs)
+            except TypeError:  # 舊版不接受 enable_mkldnn → 退回（靠 env FLAGS）
+                _kwargs.pop("enable_mkldnn", None)
+                _paddle_reader = PaddleOCR(**_kwargs)
             _OCR_AVAILABLE = True
-            logger.info("PaddleOCR PP-OCRv5 reader initialized (mkldnn off, OpenCC S→T)")
+            logger.info("PaddleOCR reader initialized (PP-OCRv5+, mkldnn off, OpenCC S→T)")
             return _paddle_reader
         except Exception as exc:
             _OCR_AVAILABLE = False
