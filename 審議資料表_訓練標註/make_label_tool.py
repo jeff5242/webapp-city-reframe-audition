@@ -64,7 +64,8 @@ main{flex:1;display:grid;grid-template-columns:1fr 420px;overflow:hidden}
 .field label{display:block;font-size:12px;font-weight:600;color:var(--soft);margin-bottom:3px}
 .field input{width:100%;font-family:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink)}
 .field input:focus{outline:none;border-color:var(--accent)}
-.field input.auto{border-left:3px solid var(--warn)}
+.field input.auto{border-left:3px solid var(--warn);background:color-mix(in srgb,var(--warn) 7%,var(--surface))}
+.aitag{font-size:10px;font-weight:700;color:#fff;background:var(--warn);border-radius:99px;padding:1px 7px;margin-left:4px;vertical-align:middle}
 .field .hint{font-size:11px;color:var(--faint);margin-top:2px}
 .section-h{font-size:12px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px;border-bottom:1px solid var(--line);padding-bottom:4px}
 details.ocr{margin-top:16px;border:1px solid var(--line);border-radius:8px}
@@ -121,10 +122,11 @@ function render(){
   const numKeys = FIELDS.filter(k=>/停車|容積|面積|比率|建蔽|戶數|樓地板/.test(k));
   let html = '<div class="meta">案：'+(d.meta.case||'?')+' · '+(d.meta.doc_type||'')+' · '+(d.meta.version||'-')+'　<span style="color:var(--faint)">'+d.name+'</span></div>';
   html += '<div class="section-h">欄位（改錯／補漏，空白=null）</div>';
+  html += '<div style="font-size:11px;color:var(--faint);margin:-4px 0 8px">🤖 橘色 = <b>AI 預填</b>，僅供參考，<b>一律以原圖核對</b>；其餘欄位請人工補。</div>';
   FIELDS.forEach(k=>{
     const v = f[k]==null? "" : f[k];
     const auto = (DATA[cur].fields[k]!=null);
-    html += '<div class="field"><label>'+k+(auto?' <span style="color:var(--warn)">· 自動填</span>':'')+'</label>'+
+    html += '<div class="field"><label>'+k+(auto?' <span class="aitag">🤖 AI 預填 · 請核對</span>':'')+'</label>'+
       '<input class="'+(auto?'auto':'')+'" data-k="'+k+'" value="'+String(v).replace(/"/g,'&quot;')+'" oninput="onEdit()" placeholder="'+(auto?'':'（讀不到／空白留空=null）')+'"></div>';
   });
   html += '<details class="ocr"><summary>📄 OCR 文字參照（數字可直接抄；中文標籤可能有錯字，以原圖為準）</summary><div class="ocrtext" id="ocrtext"></div></details>';

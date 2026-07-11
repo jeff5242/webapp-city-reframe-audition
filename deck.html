@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4 landscape; margin: 0; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family:"PingFang TC","Hiragino Sans GB","STHeiti",sans-serif; color:#1a2233; margin:0; }
+  .slide {
+    width:297mm; height:209mm; padding:16mm 20mm; page-break-after:always;
+    position:relative; display:flex; flex-direction:column; overflow:hidden;
+  }
+  .slide:last-child { page-break-after:auto; }
+  .tag { font-size:11pt; letter-spacing:3px; color:#2d6a9f; font-weight:700; margin-bottom:6px; }
+  h2 { font-size:26pt; font-weight:800; margin:0 0 4px; color:#0f2b46; }
+  .lead { font-size:12.5pt; color:#51606f; margin:0 0 18px; }
+  .accent { width:60px; height:5px; background:#f2a900; border-radius:3px; margin:10px 0 22px; }
+  .pnum { position:absolute; bottom:11mm; right:18mm; font-size:9pt; color:#9aa7b5; }
+  .foot { position:absolute; bottom:11mm; left:20mm; font-size:8.5pt; color:#9aa7b5; letter-spacing:1px; }
+
+  /* cover */
+  .cover { background:linear-gradient(135deg,#0f2b46 0%,#1b4b73 58%,#2d6a9f 100%); color:#fff; justify-content:center; }
+  .cover .eyebrow { font-size:13pt; letter-spacing:6px; color:#a9d3f2; margin-bottom:18px; font-weight:600; }
+  .cover h1 { font-size:40pt; font-weight:800; margin:0 0 14px; line-height:1.2; }
+  .cover .sub { font-size:17pt; color:#cfe4f5; }
+  .cover .rule { width:80px;height:5px;background:#f2a900;border-radius:3px;margin:26px 0; }
+  .cover .who { font-size:11pt; color:#bcd6ec; letter-spacing:1px; }
+
+  /* pain cards */
+  .cards { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:6px; }
+  .card { border:1px solid #d7e0ea; border-radius:12px; padding:18px 22px; background:#f7fafc; }
+  .card .ic { font-size:22pt; }
+  .card .h { font-size:14pt; font-weight:700; color:#0f2b46; margin:6px 0 4px; }
+  .card .d { font-size:10.5pt; color:#55606d; }
+
+  /* flow */
+  .flow { display:flex; align-items:stretch; gap:0; margin-top:14px; }
+  .step { flex:1; text-align:center; padding:20px 12px; border-radius:12px; background:#eef4fb; margin:0 6px; }
+  .step .n { display:inline-block;width:34px;height:34px;line-height:34px;border-radius:50%;background:#2d6a9f;color:#fff;font-weight:800;font-size:14pt; }
+  .step .h { font-size:12.5pt; font-weight:700; color:#0f2b46; margin:10px 0 4px; }
+  .step .d { font-size:9.5pt; color:#55606d; }
+  .arrow { align-self:center; font-size:20pt; color:#9bb4cb; }
+
+  /* capability rows */
+  .cap { display:flex; gap:18px; align-items:flex-start; padding:15px 0; border-bottom:1px solid #e4ebf2; }
+  .cap .badge { flex:0 0 148px; font-size:11pt; font-weight:700; color:#fff; background:#2d6a9f; border-radius:8px; padding:9px 12px; text-align:center; }
+  .cap .body { flex:1; }
+  .cap .h { font-size:13pt; font-weight:700; color:#0f2b46; margin:0 0 3px; }
+  .cap .d { font-size:10.5pt; color:#55606d; }
+  .cap .d b { color:#1a2233; }
+
+  .kbox { background:#fff6e5; border-left:6px solid #f2a900; border-radius:8px; padding:14px 20px; margin-top:16px; }
+  .kbox .t { font-weight:800; font-size:13pt; color:#0f2b46; margin-bottom:4px; }
+  .kbox p { margin:2px 0; font-size:11pt; }
+
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:8px; }
+  .panel { border:1px solid #d7e0ea; border-radius:12px; padding:18px 22px; }
+  .panel h4 { margin:0 0 8px; font-size:13pt; color:#2d6a9f; }
+  .panel ul { margin:0; padding-left:18px; } .panel li { font-size:10.5pt; margin:5px 0; color:#3a4650; }
+
+  /* roadmap */
+  .rm { display:flex; gap:12px; margin-top:16px; }
+  .phase { flex:1; border-radius:12px; padding:16px 16px; color:#fff; }
+  .phase.p0{ background:#2e8b57; } .phase.p1{ background:#2d6a9f; } .phase.p2{ background:#1b4b73; } .phase.p3{ background:#6f4a8e; }
+  .phase .w { font-size:9pt; opacity:.85; letter-spacing:1px; }
+  .phase .h { font-size:13pt; font-weight:800; margin:4px 0 8px; }
+  .phase ul { margin:0; padding-left:16px; } .phase li { font-size:9pt; margin:3px 0; }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="slide cover">
+  <div class="eyebrow">臺北市都市更新處</div>
+  <h1>都市更新 AI 協審系統</h1>
+  <div class="sub">以科技輔助審議 —— 提升正確性、一致性與經驗傳承</div>
+  <div class="rule"></div>
+  <div class="who">向 張溫德 副市長 簡報　·　2026 年 7 月</div>
+</div>
+
+<!-- 1. 痛點 -->
+<div class="slide">
+  <div class="tag">為什麼需要</div>
+  <h2>都更審議的四個長年痛點</h2>
+  <div class="accent"></div>
+  <div class="cards">
+    <div class="card"><div class="ic">📋</div><div class="h">法規持續更新</div><div class="d">都更條例歷經 107／108／111／113 多次修正，承辦須逐案確認適用版本與門檻。</div></div>
+    <div class="card"><div class="ic">⏳</div><div class="h">審議曠日廢時</div><div class="d">事業/權變計畫書動輒數百頁，人工逐頁核對格式、數值、法規耗時費力。</div></div>
+    <div class="card"><div class="ic">⚖️</div><div class="h">判決一致性難維持</div><div class="d">不同承辦、不同時期，對同類爭點的判斷標準不易一致。</div></div>
+    <div class="card"><div class="ic">🧠</div><div class="h">資深經驗難傳承</div><div class="d">審議判斷高度仰賴資深承辦經驗，人員異動即流失。</div></div>
+  </div>
+  <div class="foot">臺北市都市更新 AI 協審系統</div><div class="pnum">1</div>
+</div>
+
+<!-- 2. 系統概覽 -->
+<div class="slide">
+  <div class="tag">系統做什麼</div>
+  <h2>上傳計畫書 → 自動審查 → 可查核報告</h2>
+  <div class="accent"></div>
+  <div class="flow">
+    <div class="step"><div class="n">1</div><div class="h">上傳</div><div class="d">事業計畫書 / 權利變換計畫書 PDF（含掃描頁）</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="n">2</div><div class="h">自動判讀</div><div class="d">辨識文件、抽取關鍵欄位、依報核日期選定適用法規年版</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="n">3</div><div class="h">規則審查 + 抽取</div><div class="d">法規門檻檢查、審議資料表關鍵數值抽取、三段式核算對照</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="n">4</div><div class="h">可查核報告</div><div class="d">每個發現連回原文頁碼與紅框截圖、三段式對照、標記需人工複核者</div></div>
+  </div>
+  <div class="kbox">
+    <div class="t">設計核心：AI 是給審議委員查核用的工具，不是取代審議的黑箱</div>
+    <p>系統只負責「找出疑點、附上證據」，最終判斷仍由承辦與委員決定。</p>
+    <p><b>主權／地端運行</b>：目前純規則 + 地端 OCR、無需外部 API、資料完全落地不外傳。</p>
+  </div>
+  <div class="foot">臺北市都市更新 AI 協審系統</div><div class="pnum">2</div>
+</div>
+
+<!-- 3. 能力一：正確性 -->
+<div class="slide">
+  <div class="tag">核心能力 一</div>
+  <h2>法規正確性 —— 對的年版、對的門檻</h2>
+  <div class="accent"></div>
+  <div class="cap">
+    <div class="badge">法規版本自動切換</div>
+    <div class="body"><div class="h">依報核日期套用 107／108／111／113 年版</div>
+    <div class="d">同意比率門檻（111 年 2/3、3/4 ↔ 113 年 4/5）、容積獎勵上限等，<b>自動選用正確年版</b>，不會用錯規定。</div></div>
+  </div>
+  <div class="cap">
+    <div class="badge">14 項法規檢查</div>
+    <div class="body"><div class="h">文件完整性、容積獎勵 ≤ 40%、停車位、個資遮蔽、法定用詞、數值一致</div>
+    <div class="d">以<b>確定性規則引擎</b>執行（非 AI 猜測），結果可重現、可稽核。</div></div>
+  </div>
+  <div class="cap">
+    <div class="badge">準確率可量測</div>
+    <div class="body"><div class="h">內建評測基準工具，gold set 建置中</div>
+    <div class="d">已內建速度/效能基準量測；正透過標註工具收集標準答案，逐步量化精確率/召回率，<b>能回答「到底準不準」</b>並隨版本追蹤。</div></div>
+  </div>
+  <div class="foot">臺北市都市更新 AI 協審系統</div><div class="pnum">3</div>
+</div>
+
+<!-- 4. 能力二：可查核 -->
+<div class="slide">
+  <div class="tag">核心能力 二</div>
+  <h2>可查核 —— 每個發現都能追回原文</h2>
+  <div class="accent"></div>
+  <div class="cap">
+    <div class="badge">原文定位</div>
+    <div class="body"><div class="h">每個發現連回原文頁碼 + 問題處紅框截圖</div>
+    <div class="d">報告內嵌紅框截圖、PDF inline 開啟即跳到原文，<b>免下載即可查證</b>，杜絕憑空描述。</div></div>
+  </div>
+  <div class="cap">
+    <div class="badge">三段式核算</div>
+    <div class="body"><div class="h">申報值／依法規應為／系統核算 並列對照</div>
+    <div class="d">每筆關鍵數值三段對照並附來源頁，<b>落差一眼可見、可逐項回溯查證</b>。</div></div>
+  </div>
+  <div class="cap">
+    <div class="badge">分級與複核</div>
+    <div class="body"><div class="h">必檢／建議 分級，導向真正需判斷處</div>
+    <div class="d">把承辦注意力導向重大爭點；<b>未來可加 AI 信心分數自動分流</b>，高信心項目快速通過。</div></div>
+  </div>
+  <div class="kbox">
+    <div class="t">這正是為專家設計的：可查證、可信賴、可協作</div>
+    <p>審議委員不必「相信 AI」，而是用 AI 快速定位疑點、再自行查核原文。</p>
+  </div>
+  <div class="foot">臺北市都市更新 AI 協審系統</div><div class="pnum">4</div>
+</div>
+
+<!-- 5. 定位與效益 -->
+<div class="slide">
+  <div class="tag">效益</div>
+  <h2>審核端與送件端，雙向受益</h2>
+  <div class="accent"></div>
+  <div class="two">
+    <div class="panel">
+      <h4>對都更處（審核端）</h4>
+      <ul>
+        <li>大幅縮短逐頁人工核對時間</li>
+        <li>判斷標準一致化，降低承辦差異</li>
+        <li>把資深經驗沉澱為系統規則與知識庫，<b>可傳承</b></li>
+        <li>審議聚焦於真正需要判斷的爭點</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h4>對實施者（送件端）</h4>
+      <ul>
+        <li>送件前自我檢查，減少格式/數值錯誤</li>
+        <li>降低補正往返、加速報核</li>
+        <li>明確知道適用哪一年版法規與門檻</li>
+        <li>提升送件品質，縮短整體審議週期</li>
+      </ul>
+    </div>
+  </div>
+  <div class="kbox">
+    <div class="t">核心價值：把都更審議的正確性、一致性與資深經驗，標準化、可查核地傳承下去</div>
+  </div>
+  <div class="foot">臺北市都市更新 AI 協審系統</div><div class="pnum">5</div>
+</div>
+
+<!-- 6. 導入藍圖 -->
+<div class="slide">
+  <div class="tag">導入藍圖</div>
+  <h2>分階段導入，穩健擴充</h2>
+  <div class="accent"></div>
+  <div class="rm">
+    <div class="phase p0"><div class="w">現階段 · 已上線</div><div class="h">核心審查上線</div><ul><li>規則引擎 + 法規版本切換</li><li>OCR 模板錨定抽取</li><li>可查核報告（原文定位 + 三段式）</li></ul></div>
+    <div class="phase p1"><div class="w">近期 · 資料收集期</div><div class="h">資料表精準抽取</div><ul><li>審議資料表結構化抽取（VLM 兩軌）</li><li>gold set 標註 + 欄位級評測</li><li>零樣本 PoC → 視情況微調</li></ul></div>
+    <div class="phase p2"><div class="w">2026 下半 · POC</div><div class="h">知識庫 · 協審</div><ul><li>可檢索法規知識庫</li><li>選擇性 AI 語意協審</li><li>信心分數 + 人工複核佇列</li></ul></div>
+    <div class="phase p3"><div class="w">後續擴充</div><div class="h">防災 · 危老</div><ul><li>擴至危老條例、建築防災</li><li>個案知識庫累積</li><li>類似個案決議比對</li></ul></div>
+  </div>
+  <div class="kbox">
+    <div class="t">呼應副市長施政主軸：都市更新 × 建築防災安全</div>
+    <p>系統知識庫可自都更條例逐步擴充至危老重建與建築防災法規，一套架構、多域適用。</p>
+  </div>
+  <div class="foot">臺北市都市更新 AI 協審系統</div><div class="pnum">6</div>
+</div>
+
+</body>
+</html>
