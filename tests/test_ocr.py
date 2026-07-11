@@ -317,6 +317,18 @@ def test_detections_from_predict_converts_simplified_to_traditional():
     assert "內湖區" in texts      # 内 → 內
 
 
+def test_cap_size_downscales_large_and_passes_small():
+    """_cap_size caps the longest side to _OCR_MAX_DIM (keeps aspect); small→untouched."""
+    import numpy as np
+    from auditor.parsers.ocr_reader import _cap_size, _OCR_MAX_DIM
+    big = np.zeros((3000, 5000, 3), dtype=np.uint8)
+    capped = _cap_size(big)
+    assert max(capped.shape[:2]) == _OCR_MAX_DIM
+    assert capped.shape[1] > capped.shape[0]  # width>height aspect preserved
+    small = np.zeros((100, 200, 3), dtype=np.uint8)
+    assert _cap_size(small).shape == small.shape
+
+
 def test_ocr_page_uses_paddle_reader(tmp_path):
     """ocr_page must call reader.predict() and return parsed text."""
     import auditor.parsers.ocr_reader as mod

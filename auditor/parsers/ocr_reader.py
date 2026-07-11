@@ -365,10 +365,38 @@ def _detections_from_predict(result: object) -> list[dict]:
     return dets
 
 
+# 大圖在無 GPU 的 CPU 上推論太慢（zoom5≈5950px → >100s，Cloudflare 524）。上限
+# 2000px：實測此尺寸繁中/數值辨識已達 9/9 且秒級完成。reconstruct_fields 的列分群
+# 是相對（yc 差 vs 文字高），等比縮圖不影響幾何。
+_OCR_MAX_DIM = 2000
+
+
+def _cap_size(img):
+    """Downscale so the longest side ≤ _OCR_MAX_DIM (keeps CPU inference fast)."""
+    try:
+        import numpy as np
+        from PIL import Image
+        h, w = img.shape[:2]
+        longest = max(h, w)
+        if longest <= _OCR_MAX_DIM:
+            return img
+        scale = _OCR_MAX_DIM / longest
+        resized = Image.fromarray(img).resize(
+            (max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS
+        )
+        return np.array(resized)
+    except Exception:
+        return img
+
+
 def _infer(reader, img_array) -> list[dict]:
-    """Run PP-OCRv5 on one image array → canonical detections (thread-safe)."""
+    """Run OCR on one image array → canonical detections (thread-safe).
+
+    Large renders are capped to _OCR_MAX_DIM first so CPU inference stays within
+    the request time budget.
+    """
     with _INFER_LOCK:
-        result = reader.predict(img_array)
+        result = reader.predict(_cap_size(img_array))
     return _detections_from_predict(result)
 
 
