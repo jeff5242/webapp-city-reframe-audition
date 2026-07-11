@@ -12,10 +12,15 @@ OCR results are cached in a SQLite database at
 ~/.cache/urban-renewal-ocr/ocr_cache.db, keyed by (sha256 of first 64KB,
 page_index, zoom, preprocess_version).  A cache hit skips PaddleOCR entirely.
 
+Engine: PP-OCRv5 (paddleocr 3.x) via reader.predict(). Its unified recognition
+model reads dense numbers far better than the old chinese_cht model
+(measured 5/9 → 9/9 on 康寧段 p19); the occasional Simplified glyph it emits
+(类别/内) is corrected to Traditional by an OpenCC s2t post-pass. oneDNN is
+disabled (FLAGS_use_mkldnn=0) to avoid a paddle-3.0 CPU op bug.
+
 Speed: ocr_pages() uses a producer-consumer pipeline — a background thread
 renders PDF pages to numpy arrays while the main thread OCRs each page as it
-arrives, overlapping rendering I/O with inference. (PaddleOCR must be called
-per full-page image with detection enabled; list input forces det=False.)
+arrives, overlapping rendering I/O with inference (one predict() call per page).
 
 Quality: raw pixels are fed to PaddleOCR at zoom=3.0. Aggressive preprocessing
 (binarization/deskew) was measured to HURT digit recognition on dense scanned
@@ -28,6 +33,7 @@ import contextlib
 import hashlib
 import io
 import logging
+import os
 import queue
 import sqlite3
 import threading
@@ -35,6 +41,11 @@ from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# PP-OCRv5（paddle 3.x）在 CPU 上的 oneDNN 後端有 op bug（macOS: pir strides Int32；
+# Linux: onednn ConvertPirAttribute）。必須關閉 mkldnn 才能在 CPU 推論，且須在
+# import paddle 之前設定環境變數。
+os.environ.setdefault("FLAGS_use_mkldnn", "0")
 
 # ---------------------------------------------------------------------------
 # OCR result cache
@@ -277,40 +288,87 @@ def _box_geometry(box: object) -> Optional[dict]:
     return {"x0": min(xs), "x1": max(xs), "yc": sum(ys) / len(ys), "h": max(ys) - min(ys)}
 
 
-def _detections_from_result(result: object) -> list[dict]:
-    """Parse a PaddleOCR single-image result into detections.
+_opencc_conv = None
+_OPENCC_TRIED = False
 
-    Filters detections whose confidence is below ``_OCR_MIN_CONFIDENCE``. Each
-    returned dict has ``{"text","conf"}`` and, when the bbox parses, geometry
-    keys ``{"x0","x1","yc","h"}`` — enough to cluster detections into visual
-    rows and find right-neighbours. Text is kept even if geometry is missing.
 
-    PaddleOCR result format per image:
-        [[box, (text, confidence)], ...]
-    where box = [[x1,y1],[x2,y2],[x3,y3],[x4,y4]].
+def _get_opencc():
+    """Lazy OpenCC s2t converter (Simplified→Traditional); None if unavailable."""
+    global _opencc_conv, _OPENCC_TRIED
+    if _OPENCC_TRIED:
+        return _opencc_conv
+    _OPENCC_TRIED = True
+    try:
+        from opencc import OpenCC
+        try:
+            _opencc_conv = OpenCC("s2t")
+        except Exception:
+            _opencc_conv = OpenCC("s2t.json")
+        logger.info("OpenCC s2t loaded (Simplified→Traditional post-fix)")
+    except Exception as exc:
+        logger.warning("OpenCC unavailable, skipping S→T fix: %s", exc)
+        _opencc_conv = None
+    return _opencc_conv
+
+
+def _to_traditional(text: str) -> str:
+    """PP-OCRv5 的統一模型偶爾吐簡體（类别→類別、内→內）；用 OpenCC 補回繁體。
+
+    對已是繁體的字為冪等（簡→繁映射的鍵是簡體字，繁體字原樣通過）。OpenCC 不可用
+    時原樣回傳，確保 OCR 永不因此中斷。
+    """
+    conv = _get_opencc()
+    if conv is None or not text:
+        return text
+    try:
+        return conv.convert(text)
+    except Exception:
+        return text
+
+
+def _detections_from_predict(result: object) -> list[dict]:
+    """Parse PP-OCRv5 (paddleocr 3.x) ``predict()`` output into detections.
+
+    Filters detections below ``_OCR_MIN_CONFIDENCE``. Each returned dict has
+    ``{"text","conf"}`` plus, when the polygon parses, geometry keys
+    ``{"x0","x1","yc","h"}`` — the stable contract consumed by
+    ``table_reconstruct.reconstruct_fields``. Text is normalised to Traditional
+    Chinese (OpenCC s2t).
+
+    paddle 3.x result: a list of per-image result objects, each carrying a json
+    dict ``{"res": {"rec_texts": [...], "rec_scores": [...], "rec_polys": [...]}}``
+    where each poly = [[x1,y1],[x2,y2],[x3,y3],[x4,y4]].
     """
     dets: list[dict] = []
-    for detection in result or []:
-        if detection is None:
+    for item in result or []:
+        if item is None:
             continue
-        try:
-            box = detection[0]
-            text, confidence = detection[1]
-        except (IndexError, TypeError, ValueError):
-            continue
-        if confidence < _OCR_MIN_CONFIDENCE:
-            continue
-        det = {"text": str(text), "conf": float(confidence)}
-        geom = _box_geometry(box)
-        if geom:
-            det.update(geom)
-        dets.append(det)
+        data = getattr(item, "json", item)
+        node = data.get("res", data) if isinstance(data, dict) else {}
+        texts = node.get("rec_texts") or []
+        scores = node.get("rec_scores") or []
+        polys = node.get("rec_polys") or node.get("dt_polys") or []
+        for i, raw_text in enumerate(texts):
+            try:
+                conf = float(scores[i]) if i < len(scores) else 1.0
+            except (TypeError, ValueError):
+                conf = 1.0
+            if conf < _OCR_MIN_CONFIDENCE:
+                continue
+            det = {"text": _to_traditional(str(raw_text)), "conf": conf}
+            if i < len(polys):
+                geom = _box_geometry(polys[i])
+                if geom:
+                    det.update(geom)
+            dets.append(det)
     return dets
 
 
-def _parse_paddle_result(result: object) -> str:
-    """Extract joined text from a PaddleOCR result for a single image."""
-    return "\n".join(d["text"] for d in _detections_from_result(result))
+def _infer(reader, img_array) -> list[dict]:
+    """Run PP-OCRv5 on one image array → canonical detections (thread-safe)."""
+    with _INFER_LOCK:
+        result = reader.predict(img_array)
+    return _detections_from_predict(result)
 
 
 def _get_reader():
@@ -325,14 +383,15 @@ def _get_reader():
             return _paddle_reader
         try:
             from paddleocr import PaddleOCR
+            # PP-OCRv5 預設統一 rec 模型（繁簡通用，數值辨識明顯優於舊 chinese_cht）。
+            # 不傳 lang（用預設 v5，非弱項的 cht 專用模型）；簡體洩漏交給 OpenCC 後處理。
             _paddle_reader = PaddleOCR(
-                use_angle_cls=True,
-                lang="chinese_cht",
-                use_gpu=False,
-                show_log=False,
+                use_doc_orientation_classify=False,
+                use_doc_unwarping=False,
+                use_textline_orientation=False,
             )
             _OCR_AVAILABLE = True
-            logger.info("PaddleOCR reader initialized (chinese_cht)")
+            logger.info("PaddleOCR PP-OCRv5 reader initialized (mkldnn off, OpenCC S→T)")
             return _paddle_reader
         except Exception as exc:
             _OCR_AVAILABLE = False
@@ -389,10 +448,8 @@ def ocr_page(pdf_path: str, page_index: int, zoom: float = 3.0) -> str:
         img = Image.open(io.BytesIO(pix.tobytes("png")))
         img_array = _preprocess_for_ocr(np.array(img))
 
-        with _INFER_LOCK:
-            result = reader.ocr(img_array, cls=True)
-
-        text = _parse_paddle_result(result[0] if result else None)
+        dets = _infer(reader, img_array)
+        text = "\n".join(d["text"] for d in dets)
 
         if conn and fhash:
             _cache_put(conn, fhash, page_index, zoom, text)
@@ -469,10 +526,8 @@ def ocr_pages(pdf_path: str, page_indices: list[int], zoom: float = 3.0) -> dict
         renderer = threading.Thread(target=_render_worker, daemon=True)
         renderer.start()
 
-        # Consume rendered pages as they arrive and OCR each one individually.
-        # PaddleOCR's .ocr() must run per full-page image with detection enabled
-        # (passing a list forces det=False, which treats inputs as pre-cropped
-        # regions — wrong for whole pages). Per-page calls overlap with rendering.
+        # Consume rendered pages as they arrive and OCR each one individually via
+        # predict(). Per-page calls overlap with rendering.
         while True:
             item = render_q.get()
             if item is None:
@@ -481,9 +536,8 @@ def ocr_pages(pdf_path: str, page_indices: list[int], zoom: float = 3.0) -> dict
             if img_array is None:
                 continue
             preprocessed = _preprocess_for_ocr(img_array)
-            with _INFER_LOCK:
-                result = reader.ocr(preprocessed, cls=True)
-            text = _parse_paddle_result(result[0] if result else None)
+            dets = _infer(reader, preprocessed)
+            text = "\n".join(d["text"] for d in dets)
             results[idx] = text
             if conn and fhash:
                 _cache_put(conn, fhash, idx, zoom, text)
@@ -538,10 +592,7 @@ def ocr_page_boxes(pdf_path: str, page_index: int, zoom: float = 3.0) -> list[di
         img = Image.open(io.BytesIO(pix.tobytes("png")))
         img_array = _preprocess_for_ocr(np.array(img))
 
-        with _INFER_LOCK:
-            result = reader.ocr(img_array, cls=True)
-
-        dets = _detections_from_result(result[0] if result else None)
+        dets = _infer(reader, img_array)
 
         if conn and fhash:
             _boxes_cache_put(conn, fhash, page_index, zoom, dets)
@@ -589,9 +640,7 @@ def ocr_regions(
             crop = img[int(y0 * H): int(y1 * H), int(x0 * W): int(x1 * W)]
             if crop.size == 0:
                 continue
-            with _INFER_LOCK:
-                result = reader.ocr(crop, cls=True)
-            dets = _detections_from_result(result[0] if result else None)
+            dets = _infer(reader, crop)
             out[field] = " ".join(d.get("text", "") for d in dets)
         return out
     except Exception as exc:

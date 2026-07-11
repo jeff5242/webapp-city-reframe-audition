@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from auditor.extractors.table_reconstruct import reconstruct_fields
-from auditor.parsers.ocr_reader import _box_geometry, _detections_from_result
+from auditor.parsers.ocr_reader import _box_geometry, _detections_from_predict
 
 
 def _det(text, x0, x1, yc, h=20, conf=0.99):
@@ -77,7 +77,7 @@ def test_empty_and_geometryless_input():
     assert reconstruct_fields([{"text": "法定汽車停車位", "conf": 0.9}]) == {}
 
 
-# ── _box_geometry / _detections_from_result ──────────────────────────────────
+# ── _box_geometry / _detections_from_predict ─────────────────────────────────
 
 def test_box_geometry_from_four_corners():
     geom = _box_geometry([[10, 20], [110, 20], [110, 40], [10, 40]])
@@ -90,20 +90,25 @@ def test_box_geometry_none_on_bad_box():
 
 
 def test_detections_keep_text_and_geometry():
-    result = [
-        [[[0, 0], [100, 0], [100, 20], [0, 20]], ("法定停車位", 0.99)],
-        [[[110, 0], [140, 0], [140, 20], [110, 20]], ("58", 0.95)],
-        [[[0, 0], [50, 0], [50, 20], [0, 20]], ("低信心", 0.30)],  # dropped
-    ]
-    dets = _detections_from_result(result)
+    result = [{"res": {
+        "rec_texts": ["法定停車位", "58", "低信心"],
+        "rec_scores": [0.99, 0.95, 0.30],  # 低信心 dropped by confidence
+        "rec_polys": [
+            [[0, 0], [100, 0], [100, 20], [0, 20]],
+            [[110, 0], [140, 0], [140, 20], [110, 20]],
+            [[0, 0], [50, 0], [50, 20], [0, 20]],
+        ],
+    }}]
+    dets = _detections_from_predict(result)
     assert [d["text"] for d in dets] == ["法定停車位", "58"]
     assert dets[0]["x0"] == 0.0 and dets[0]["x1"] == 100.0
     assert dets[1]["yc"] == 10.0
 
 
 def test_detections_keep_text_when_box_missing():
-    # box=None (as in some upstream results) → text kept, geometry absent.
-    dets = _detections_from_result([[None, ("純文字", 0.9)]])
+    # no polys (as in some results) → text kept, geometry absent.
+    result = [{"res": {"rec_texts": ["純文字"], "rec_scores": [0.9]}}]
+    dets = _detections_from_predict(result)
     assert dets[0]["text"] == "純文字"
     assert "x0" not in dets[0]
 

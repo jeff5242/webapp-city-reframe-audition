@@ -269,42 +269,61 @@ def test_extract_front_docs_no_ocr_flag_skips_ocr():
 
 # ── PaddleOCR integration (Item 1) ───────────────────────────────────────────
 
-def test_parse_paddle_result_empty_on_none():
-    from auditor.parsers.ocr_reader import _parse_paddle_result
-    assert _parse_paddle_result(None) == ""
-    assert _parse_paddle_result([]) == ""
+def _predict_result(pairs):
+    """Build a mock paddle-3.x predict() result from (text, conf) pairs."""
+    return [{"res": {
+        "rec_texts": [t for t, _ in pairs],
+        "rec_scores": [c for _, c in pairs],
+    }}]
 
 
-def test_parse_paddle_result_filters_low_confidence():
+def test_detections_from_predict_empty_on_none():
+    from auditor.parsers.ocr_reader import _detections_from_predict
+    assert _detections_from_predict(None) == []
+    assert _detections_from_predict([]) == []
+
+
+def test_detections_from_predict_filters_low_confidence():
     """Detections below _OCR_MIN_CONFIDENCE must be excluded."""
-    from auditor.parsers.ocr_reader import _parse_paddle_result, _OCR_MIN_CONFIDENCE
-    detections = [
-        [None, ("高信心", 0.95)],
-        [None, ("低信心", _OCR_MIN_CONFIDENCE - 0.1)],
-        [None, ("邊界值", _OCR_MIN_CONFIDENCE)],
-    ]
-    text = _parse_paddle_result(detections)
-    assert "高信心" in text
-    assert "邊界值" in text
-    assert "低信心" not in text
+    from auditor.parsers.ocr_reader import _detections_from_predict, _OCR_MIN_CONFIDENCE
+    result = _predict_result([
+        ("高信心", 0.95),
+        ("低信心", _OCR_MIN_CONFIDENCE - 0.1),
+        ("邊界值", _OCR_MIN_CONFIDENCE),
+    ])
+    texts = [d["text"] for d in _detections_from_predict(result)]
+    assert "高信心" in texts
+    assert "邊界值" in texts
+    assert "低信心" not in texts
 
 
-def test_parse_paddle_result_joins_lines():
-    from auditor.parsers.ocr_reader import _parse_paddle_result
-    detections = [
-        [None, ("line one", 0.9)],
-        [None, ("line two", 0.8)],
-    ]
-    assert _parse_paddle_result(detections) == "line one\nline two"
+def test_detections_from_predict_extracts_all_texts():
+    from auditor.parsers.ocr_reader import _detections_from_predict
+    result = _predict_result([("line one", 0.9), ("line two", 0.8)])
+    texts = [d["text"] for d in _detections_from_predict(result)]
+    assert texts == ["line one", "line two"]
+
+
+def test_detections_from_predict_converts_simplified_to_traditional():
+    """PP-OCRv5 偶爾吐簡體，_to_traditional（OpenCC s2t）應轉回繁體。"""
+    import importlib.util
+    import pytest
+    if importlib.util.find_spec("opencc") is None:
+        pytest.skip("opencc not installed")
+    from auditor.parsers.ocr_reader import _detections_from_predict
+    result = _predict_result([("送審类别", 0.9), ("内湖區", 0.9)])
+    texts = [d["text"] for d in _detections_from_predict(result)]
+    assert "送審類別" in texts   # 类别 → 類別
+    assert "內湖區" in texts      # 内 → 內
 
 
 def test_ocr_page_uses_paddle_reader(tmp_path):
-    """ocr_page must call reader.ocr() and return parsed text."""
+    """ocr_page must call reader.predict() and return parsed text."""
     import auditor.parsers.ocr_reader as mod
     from unittest.mock import MagicMock, patch
 
     fake_reader = MagicMock()
-    fake_reader.ocr.return_value = [[[None, ("測試文字", 0.95)]]]
+    fake_reader.predict.return_value = _predict_result([("測試文字", 0.95)])
 
     fake_doc = MagicMock()
     fake_pix = MagicMock()
@@ -323,23 +342,19 @@ def test_ocr_page_uses_paddle_reader(tmp_path):
         result = mod.ocr_page("fake.pdf", 0)
 
     assert "測試文字" in result
-    fake_reader.ocr.assert_called_once()
+    fake_reader.predict.assert_called_once()
 
 
 def test_ocr_pages_per_page_call(tmp_path):
-    """ocr_pages must call reader.ocr() once per page with a single-image input.
-
-    PaddleOCR rejects list input with detection enabled ("When input a list of
-    images, det must be false"), so pages are OCR'd individually — one call each.
-    """
+    """ocr_pages must call reader.predict() once per page with a single image."""
     import auditor.parsers.ocr_reader as mod
     from unittest.mock import MagicMock, patch
 
     fake_reader = MagicMock()
-    # Each per-page call returns a single-image result: [page_result]
-    fake_reader.ocr.side_effect = [
-        [[[None, ("頁一", 0.9)]]],
-        [[[None, ("頁二", 0.8)]]],
+    # Each per-page call returns a single-image predict result
+    fake_reader.predict.side_effect = [
+        _predict_result([("頁一", 0.9)]),
+        _predict_result([("頁二", 0.8)]),
     ]
 
     fake_pix = MagicMock()
@@ -359,10 +374,10 @@ def test_ocr_pages_per_page_call(tmp_path):
          patch.object(mod._fitz, "open", return_value=fake_doc):
         result = mod.ocr_pages("fake.pdf", [0, 1])
 
-    assert fake_reader.ocr.call_count == 2, "Each page must be a separate reader.ocr() call"
+    assert fake_reader.predict.call_count == 2, "Each page must be a separate reader.predict() call"
     # every call must pass a single image (ndarray), never a list
-    for call in fake_reader.ocr.call_args_list:
-        assert not isinstance(call.args[0], list), "must not pass a list to reader.ocr()"
+    for call in fake_reader.predict.call_args_list:
+        assert not isinstance(call.args[0], list), "must not pass a list to reader.predict()"
     assert "頁一" in result.get(0, "")
     assert "頁二" in result.get(1, "")
 
@@ -508,11 +523,12 @@ def test_ocr_min_confidence_constant_exists():
     assert 0.0 < _OCR_MIN_CONFIDENCE < 1.0
 
 
-def test_parse_paddle_result_skips_none_detection():
-    """None entries in the detection list must be skipped gracefully."""
-    from auditor.parsers.ocr_reader import _parse_paddle_result
-    detections = [None, [None, ("valid", 0.9)], None]
-    assert _parse_paddle_result(detections) == "valid"
+def test_detections_from_predict_skips_none_items():
+    """None entries in the predict result list must be skipped gracefully."""
+    from auditor.parsers.ocr_reader import _detections_from_predict
+    result = [None, {"res": {"rec_texts": ["valid"], "rec_scores": [0.9]}}, None]
+    dets = _detections_from_predict(result)
+    assert [d["text"] for d in dets] == ["valid"]
 
 
 # ── cache version key (Item 7) ────────────────────────────────────────────────
