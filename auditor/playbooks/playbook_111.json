@@ -5,51 +5,51 @@
   "rules": [
     {
       "rule_id": "PB-TAB-01", "rule_name": "審議資料表含無障礙車位欄位",
-      "type": "review_field_present", "field": "accessible_parking", "enabled": true,
+      "type": "review_field_present", "field": "accessible_parking", "enabled": false, "_dedup_note": "示範規則，已由手寫規則涵蓋（避免報告雙份）；playbook 保留給淨新增規則",
       "severity": "high", "reference": "111年版修訂重點第2點",
       "source_clause": "審議資料表 — 新增無障礙車位欄位、充電車位欄位"
     },
     {
       "rule_id": "PB-TAB-02", "rule_name": "審議資料表含充電車位欄位",
-      "type": "review_field_present", "field": "ev_parking", "enabled": true,
+      "type": "review_field_present", "field": "ev_parking", "enabled": false, "_dedup_note": "示範規則，已由手寫規則涵蓋（避免報告雙份）；playbook 保留給淨新增規則",
       "severity": "high", "reference": "111年版修訂重點第2點",
       "source_clause": "審議資料表 — 新增無障礙車位欄位、充電車位欄位"
     },
     {
       "rule_id": "PB-CALC-01", "rule_name": "衍生容積獎勵上限 = 基準容積 × 50%",
       "type": "formula_check", "target": "bonus_limit", "ref_field": "base_floor_area",
-      "factor": 0.5, "tolerance": 0.01, "enabled": true,
+      "factor": 0.5, "tolerance": 0.01, "enabled": false, "_dedup_note": "示範規則，已由手寫規則涵蓋（避免報告雙份）；playbook 保留給淨新增規則",
       "severity": "critical", "reference": "都更條例第65條 / 111年版修訂重點第6點",
       "source_clause": "申請容積獎勵項目及額度 — 依都更條例第65條修正獎勵上限"
     },
     {
       "rule_id": "PB-CALC-02", "rule_name": "合計獎勵樓地板不得逾衍生獎勵上限",
       "type": "threshold", "field": "bonus_floor_area", "op": "<=", "ref_field": "bonus_limit",
-      "enabled": true, "severity": "critical", "reference": "都更條例第65條",
+      "enabled": false, "_dedup_note": "示範規則，已由手寫規則涵蓋（避免報告雙份）；playbook 保留給淨新增規則", "severity": "critical", "reference": "都更條例第65條",
       "source_clause": "容積獎勵額度不得逾上限"
     },
 
     {
       "rule_id": "PB-DOC-A01", "rule_name": "附錄一 實施者證明文件 必附",
-      "type": "attachment_present", "attachment": "實施者證明文件", "enabled": false,
+      "type": "attachment_present", "attachment": "實施者證明文件", "enabled": true,
       "severity": "high", "reference": "111年版 附錄清單·一",
       "source_clause": "附錄一 實施者證明文件（必附）"
     },
     {
       "rule_id": "PB-DOC-A07", "rule_name": "附錄七 土地權屬清冊 必附",
-      "type": "attachment_present", "attachment": "更新單元土地權屬清冊", "enabled": false,
+      "type": "attachment_present", "attachment": "更新單元土地權屬清冊", "enabled": true,
       "severity": "high", "reference": "111年版 附錄清單·七",
       "source_clause": "附錄七 更新單元土地權屬清冊（必附）"
     },
     {
       "rule_id": "PB-DOC-A14", "rule_name": "附錄十四 建材設備等級表 必附",
-      "type": "attachment_present", "attachment": "建築工程建材設備等級表", "enabled": false,
+      "type": "attachment_present", "attachment": "建築工程建材設備等級表", "enabled": true,
       "severity": "high", "reference": "111年版 附錄清單·十四",
       "source_clause": "附錄十四 建築工程建材設備等級表（必附）"
     },
     {
       "rule_id": "PB-DOC-A24", "rule_name": "附錄二十四 都市更新事業計畫圖 必附",
-      "type": "attachment_present", "attachment": "都市更新事業計畫圖", "enabled": false,
+      "type": "attachment_present", "attachment": "都市更新事業計畫圖", "enabled": true,
       "severity": "high", "reference": "111年版 附錄清單·二十四",
       "source_clause": "附錄二十四 都市更新事業計畫圖（必附）"
     },

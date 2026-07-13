@@ -132,5 +132,7 @@ def build_engine_with_playbook(version: str = "111", playbook_path: str = None) 
     engine = build_default_engine()
     path = playbook_path or default_playbook_path(version)
     if path:
-        engine.rules.extend(load_playbook(path))
+        # 只納入 enabled 規則進主引擎（草稿/未複核者不進報告，避免 skip 雜訊與重複判定）
+        live = [r for r in load_playbook(path) if r.spec.get("enabled", True)]
+        engine.rules.extend(live)
     return engine

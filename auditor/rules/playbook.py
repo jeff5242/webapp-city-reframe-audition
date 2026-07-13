@@ -50,6 +50,7 @@ class PlaybookRule(Rule):
             "review_field_present": self._eval_field_present,
             "formula_check": self._eval_formula,
             "threshold": self._eval_threshold,
+            "attachment_present": self._eval_attachment,
         }.get(self.rule_type)
         if handler is None:
             # 未實作的型別（如 附錄偵測）→ 明確 skip，不假裝有跑
@@ -111,6 +112,16 @@ class PlaybookRule(Rule):
                               expected_calc=calc, computed_result=f"{ref:g}")
         return self._fail(f"{self.rule_name}：不符（{val:g} 未 {op} {ref:g}）",
                           applied_value=applied, expected_calc=calc, computed_result=f"{ref:g}")
+
+    # --- 附錄必附（例：附錄十四 建材設備等級表）---
+    def _eval_attachment(self, data: AuditData) -> Finding:
+        # 未偵測附錄清單 → skip（不誤報缺件）
+        if getattr(data, "attachments", None) is None:
+            return self._skip("附錄清單未偵測（extractor 未回傳）")
+        name = self.spec["attachment"]
+        if name in data.attachments:
+            return self._pass(f"{self.rule_name}：已檢附")
+        return self._fail(f"{self.rule_name}：未檢附（111年版必附）")
 
 
 def load_playbook(path: str) -> List[PlaybookRule]:
