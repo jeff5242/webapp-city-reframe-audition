@@ -425,6 +425,9 @@ def _run_audit_sync(
         )
         audit_time = datetime.now(_TAIPEI_TZ).strftime("%Y-%m-%d %H:%M")
 
+        # 系統/測試上傳不寫入歷史,避免洗版
+        _is_test_upload = _looks_like_test_upload(bp_fname, case_name)
+
         # Diff
         diffs: list[FindingDiff] = []
         prev_audit_time: Optional[str] = None
@@ -433,17 +436,18 @@ def _run_audit_sync(
             prev_audit_time = prev_run["audit_time"]
             diffs = _compute_diff(prev_run["findings"], findings)
 
-        # Save run
-        save_run(
-            case_name=case_name,
-            audit_time=audit_time,
-            rule_ver=reg_version.label,
-            findings_json=json.dumps([
-                {"rule_id": f.rule_id, "rule_name": f.rule_name,
-                 "status": f.status, "message": f.message, "evidence": f.evidence}
-                for f in findings
-            ]),
-        )
+        # Save run(系統/測試上傳不記錄)
+        if not _is_test_upload:
+            save_run(
+                case_name=case_name,
+                audit_time=audit_time,
+                rule_ver=reg_version.label,
+                findings_json=json.dumps([
+                    {"rule_id": f.rule_id, "rule_name": f.rule_name,
+                     "status": f.status, "message": f.message, "evidence": f.evidence}
+                    for f in findings
+                ]),
+            )
 
         # Metrics
         _submission_type = review_table.submission_type if review_table else None
@@ -467,16 +471,17 @@ def _run_audit_sync(
             1 if all(f.status == "pass" for f in _parking_findings) else 0
         ) if _parking_findings else None
         _pii_high_count = sum(1 for r in pii_risks if r.severity == "HIGH")
-        save_run_metrics(
-            case_name=case_name,
-            submission_type=_submission_type,
-            bonus_pct=_bonus_pct,
-            critical_count=_critical_count,
-            high_count=_high_count,
-            warn_count=_warn_count,
-            parking_pass=_parking_pass,
-            pii_high_count=_pii_high_count,
-        )
+        if not _is_test_upload:
+            save_run_metrics(
+                case_name=case_name,
+                submission_type=_submission_type,
+                bonus_pct=_bonus_pct,
+                critical_count=_critical_count,
+                high_count=_high_count,
+                warn_count=_warn_count,
+                parking_pass=_parking_pass,
+                pii_high_count=_pii_high_count,
+            )
 
         peer_stats = get_peer_stats(_submission_type)
 
@@ -582,8 +587,8 @@ def _run_audit_sync(
         _set_task_progress(task_id, "running", "產生審查報告中…")
         html = generate_report(report)
 
-        # Save S3 meta
-        if bp_s3_key and s3_available():
+        # Save S3 meta(系統/測試上傳不記錄)
+        if bp_s3_key and s3_available() and not _is_test_upload:
             try:
                 save_case_meta(
                     bp_key=bp_s3_key,
@@ -620,6 +625,14 @@ if s3_available():
     setup_bucket_encryption()
 
 
+def _looks_like_test_upload(bp_fname: Optional[str], case_name: Optional[str]) -> bool:
+    """系統/測試上傳(檔名或案名含 test/e2e/測試 標記)→ 不寫入歷史,避免洗版。"""
+    return any(
+        marker in (bp_fname or "").lower() or marker in (case_name or "")
+        for marker in ("test", "e2e", "測試")
+    )
+
+
 @app.get("/health")
 async def health() -> JSONResponse:
     """Health check. Also surfaces the active OCR mode so the地端 VLM vs
@@ -637,8 +650,11 @@ async def health() -> JSONResponse:
 
 @app.get("/", response_class=HTMLResponse)
 async def upload_page(request: Request) -> HTMLResponse:
+    from .parsers.vlm_reader import vlm_enabled
     return templates.TemplateResponse(
-        request, "upload.html", {"method_docs": METHOD_DOCS}
+        request, "upload.html",
+        {"method_docs": METHOD_DOCS,
+         "ocr_mode": "vlm" if vlm_enabled() else "paddleocr"},
     )
 
 

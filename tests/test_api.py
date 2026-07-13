@@ -48,6 +48,21 @@ def test_health_reflects_vlm_switch(monkeypatch):
     assert body["vlm_endpoint_host"] == "gpu.example.com:8000"
 
 
+def test_looks_like_test_upload():
+    from auditor.main import _looks_like_test_upload
+    assert _looks_like_test_upload("e2e test.pdf", "x") is True
+    assert _looks_like_test_upload("api_test.pdf", "x") is True
+    assert _looks_like_test_upload("plan.pdf", "測試案件") is True      # 案名含測試
+    assert _looks_like_test_upload("大魯閣.pdf", "大魯閣-事業計畫") is False
+
+
+def test_homepage_ocr_badge(monkeypatch):
+    monkeypatch.delenv("VLM_ENDPOINT", raising=False)
+    assert "PaddleOCR" in client.get("/").text
+    monkeypatch.setenv("VLM_ENDPOINT", "https://gpu:8000")
+    assert "地端 VLM" in client.get("/").text
+
+
 # ── homepage ─────────────────────────────────────────────────────────────────
 
 def test_homepage_renders():
