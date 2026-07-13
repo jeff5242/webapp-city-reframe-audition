@@ -33,8 +33,9 @@ RUN apt-get update \
         "pymupdf>=1.23.0" \
         "boto3>=1.34.0" \
         "python-dotenv>=1.0.0" \
-        "paddlepaddle>=2.6.0,<3.0.0" \
-        "paddleocr>=2.7.0,<3.0.0" \
+        "paddlepaddle>=3.0.0" \
+        "paddleocr>=3.0.0" \
+        "opencc-python-reimplemented>=0.1.7" \
         "scikit-image>=0.21.0" \
         "pillow>=10.0.0" \
         "docling>=2.0.0" \
@@ -42,9 +43,12 @@ RUN apt-get update \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
-# Pre-download PaddleOCR models so container startup is fast (no internet needed at runtime).
-# Pinned to 2.x: the app uses the 2.x API (use_angle_cls/use_gpu/show_log, PPStructure).
-RUN python3 -c "from paddleocr import PaddleOCR; PaddleOCR(use_angle_cls=True, lang='chinese_cht', use_gpu=False, show_log=False)" || true
+# oneDNN 在 paddle-3.0 CPU 有 op bug（strides/ConvertPirAttribute）→ 全程關閉。
+ENV FLAGS_use_mkldnn=0
+
+# Pre-download PP-OCRv5+ models so container startup is fast (no internet needed at runtime).
+# paddleocr 3.x API：predict()、預設統一 rec（繁簡通用）；不傳 lang；enable_mkldnn=False。
+RUN python3 -c "from paddleocr import PaddleOCR; PaddleOCR(use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False, enable_mkldnn=False)" || true
 
 # Copy source (after deps so source changes don't bust dep cache)
 COPY . .

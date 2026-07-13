@@ -17,7 +17,7 @@ trusted here: numeric coercion drops a wrongly-picked text neighbour to None
 those are left to the text-regex pass.
 
 A *detection* is a dict ``{"text","conf","x0","x1","yc","h"}`` as produced by
-``ocr_reader._detections_from_result``.
+``ocr_reader._detections_from_predict``.
 """
 from __future__ import annotations
 

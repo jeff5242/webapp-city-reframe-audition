@@ -50,7 +50,7 @@ from .models import AiFinding, AuditData, AuditReport, FindingDiff
 from .reporters.evidence_snapshot import render_evidence_thumbnails
 from .reporters.html_reporter import _evidence_page, generate_report
 from .reporters.method_docs import METHOD_DOCS
-from .rules.engine import build_default_engine
+from .rules.engine import build_default_engine, build_engine_with_playbook
 from .storage.history import delete_test_runs, get_prev_run, get_peer_stats, init_db, save_run, save_run_metrics
 from .version_selector import select_version
 
@@ -282,7 +282,10 @@ templates.env.globals["APP_VERSION"] = APP_VERSION
 
 if _STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
-_engine = build_default_engine()
+# 14 條手寫規則 + playbook 宣告式規則（缺口3 規則外部化）。
+# 目前 playbook live 規則為 0（示範規則已標 enabled=false 避免與手寫重複）；
+# 待 extractor 支援後，附錄必附等草稿規則 enable 即在此自動生效。
+_engine = build_engine_with_playbook("111")
 
 # In-memory cache for annotated PDFs (key → bytes)
 _PDF_CACHE: dict[str, bytes] = {}
@@ -365,6 +368,11 @@ def _run_audit_sync(
             number_contexts = extract_number_contexts(primary_pdf)
         except Exception:
             number_contexts = []
+        try:
+            from .extractors.attachments import detect_attachments_from_pdf
+            attachments = detect_attachments_from_pdf(primary_pdf)
+        except Exception:
+            attachments = None  # 偵測失敗 → 附錄規則 skip，不誤報缺件
 
         _set_task_progress(task_id, "running", "執行規則檢查中…")
         audit_data = AuditData(
@@ -373,6 +381,7 @@ def _run_audit_sync(
             pii_risks=tuple(pii_risks),
             term_matches=tuple(term_matches),
             number_contexts=tuple(number_contexts),
+            attachments=attachments,
         )
         findings = _engine.evaluate(audit_data)
 

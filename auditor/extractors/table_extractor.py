@@ -424,6 +424,23 @@ def _extract_via_template(pdf_path: str, page_num: int,
         return {}
 
 
+# ── on-prem VLM (地端 OCR) ─────────────────────────────────────────────────────
+
+def _extract_via_vlm(pdf_path: str, page_num: int) -> Dict[str, object]:
+    """On-prem VLM tier (地端 OCR). {} when VLM_ENDPOINT unset or on any failure.
+
+    Sovereign & fast: reads the dense grid directly from an on-prem GPU service,
+    typically filling every critical field so the slower CPU OCR tiers below are
+    skipped — the switch that turns a timing-out /audit into a seconds-out one.
+    """
+    try:
+        from ..parsers.vlm_reader import extract_review_table_fields
+        return extract_review_table_fields(pdf_path, page_num)
+    except Exception as exc:  # pragma: no cover - defensive; VLM is best-effort
+        log.warning("VLM extraction failed (non-fatal): %s", exc)
+        return {}
+
+
 # ── orchestration ─────────────────────────────────────────────────────────────
 
 def enhance_review_table(
@@ -434,6 +451,9 @@ def enhance_review_table(
     """Fill gaps in *base* using hybrid structured extraction.
 
     Tiers (each only *fills* missing fields, never overwrites the text pass):
+    0. On-prem VLM (地端 OCR) — when VLM_ENDPOINT is set, reads the grid directly
+       and typically fills every critical field in seconds, so the slower CPU
+       tiers below are skipped. Sovereign; no-op when unset.
     1. On-prem PP-Structure table recognition (disabled by default).
     2. On-prem geometric bbox reconstruction from OCR (副總 #3) — the primary
        sovereign gap-filler for the dense grid; runs whenever critical-field
@@ -446,6 +466,11 @@ def enhance_review_table(
     page_num = base.raw_page
     if not page_num:
         return base
+
+    # Tier 0 — on-prem VLM (地端 OCR): fast & sovereign. When VLM_ENDPOINT is set
+    # it reads the dense grid directly, typically filling every critical field so
+    # the slower CPU OCR tiers below are skipped — turning a timeout into seconds.
+    base = _merge_into(base, _extract_via_vlm(pdf_path, page_num))
 
     structured = _extract_via_ppstructure(pdf_path, page_num)
     merged = _merge_into(base, structured)

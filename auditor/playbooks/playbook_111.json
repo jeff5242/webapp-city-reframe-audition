@@ -1,0 +1,87 @@
+{
+  "version": "111",
+  "description": "111年版 規則 playbook（宣告式設定，由條文抽取產生 → 承辦複核 → 上線）。enabled=false 為草稿，只 skip 不上線判定。新增規則改此檔即可，不用寫 Python。",
+  "source": "docs/urban-renewal-111-wiki.md / docs/PoC_規則自動抽取_111年版.md",
+  "rules": [
+    {
+      "rule_id": "PB-TAB-01", "rule_name": "審議資料表含無障礙車位欄位",
+      "type": "review_field_present", "field": "accessible_parking", "enabled": false, "_dedup_note": "示範規則，已由手寫規則涵蓋（避免報告雙份）；playbook 保留給淨新增規則",
+      "severity": "high", "reference": "111年版修訂重點第2點",
+      "source_clause": "審議資料表 — 新增無障礙車位欄位、充電車位欄位"
+    },
+    {
+      "rule_id": "PB-TAB-02", "rule_name": "審議資料表含充電車位欄位",
+      "type": "review_field_present", "field": "ev_parking", "enabled": false, "_dedup_note": "示範規則，已由手寫規則涵蓋（避免報告雙份）；playbook 保留給淨新增規則",
+      "severity": "high", "reference": "111年版修訂重點第2點",
+      "source_clause": "審議資料表 — 新增無障礙車位欄位、充電車位欄位"
+    },
+    {
+      "rule_id": "PB-CALC-01", "rule_name": "衍生容積獎勵上限 = 基準容積 × 50%",
+      "type": "formula_check", "target": "bonus_limit", "ref_field": "base_floor_area",
+      "factor": 0.5, "tolerance": 0.01, "enabled": false, "_dedup_note": "示範規則，已由手寫規則涵蓋（避免報告雙份）；playbook 保留給淨新增規則",
+      "severity": "critical", "reference": "都更條例第65條 / 111年版修訂重點第6點",
+      "source_clause": "申請容積獎勵項目及額度 — 依都更條例第65條修正獎勵上限"
+    },
+    {
+      "rule_id": "PB-CALC-02", "rule_name": "合計獎勵樓地板不得逾衍生獎勵上限",
+      "type": "threshold", "field": "bonus_floor_area", "op": "<=", "ref_field": "bonus_limit",
+      "enabled": false, "_dedup_note": "示範規則，已由手寫規則涵蓋（避免報告雙份）；playbook 保留給淨新增規則", "severity": "critical", "reference": "都更條例第65條",
+      "source_clause": "容積獎勵額度不得逾上限"
+    },
+
+    {
+      "rule_id": "PB-DOC-A01", "rule_name": "附錄一 實施者證明文件 必附",
+      "type": "attachment_present", "attachment": "實施者證明文件", "enabled": true,
+      "severity": "high", "reference": "111年版 附錄清單·一",
+      "source_clause": "附錄一 實施者證明文件（必附）"
+    },
+    {
+      "rule_id": "PB-DOC-A07", "rule_name": "附錄七 土地權屬清冊 必附",
+      "type": "attachment_present", "attachment": "更新單元土地權屬清冊", "enabled": true,
+      "severity": "high", "reference": "111年版 附錄清單·七",
+      "source_clause": "附錄七 更新單元土地權屬清冊（必附）"
+    },
+    {
+      "rule_id": "PB-DOC-A14", "rule_name": "附錄十四 建材設備等級表 必附",
+      "type": "attachment_present", "attachment": "建築工程建材設備等級表", "enabled": true,
+      "severity": "high", "reference": "111年版 附錄清單·十四",
+      "source_clause": "附錄十四 建築工程建材設備等級表（必附）"
+    },
+    {
+      "rule_id": "PB-DOC-A24", "rule_name": "附錄二十四 都市更新事業計畫圖 必附",
+      "type": "attachment_present", "attachment": "都市更新事業計畫圖", "enabled": true,
+      "severity": "high", "reference": "111年版 附錄清單·二十四",
+      "source_clause": "附錄二十四 都市更新事業計畫圖（必附）"
+    },
+    {
+      "rule_id": "PB-FMT-01", "rule_name": "千分位分隔符須為半形逗號",
+      "type": "text_format", "pattern": "thousands_comma", "enabled": false,
+      "severity": "low", "reference": "111年版 製作規範·數字格式",
+      "source_clause": "千分位分隔符號：「,」（逗號）"
+    },
+    {
+      "rule_id": "PB-FMT-04", "rule_name": "面積單位須 m²、長度單位須 M",
+      "type": "text_format", "pattern": "unit_area_m2", "enabled": false,
+      "severity": "low", "reference": "111年版 製作規範·數字格式",
+      "source_clause": "單位：面積用 m²；公尺用 M"
+    },
+    {
+      "rule_id": "PB-PII-02", "rule_name": "姓名須遮蔽（陳○明式）、電話/身分證後四碼遮蔽",
+      "type": "pii_masking", "targets": ["name", "phone", "id_number"], "enabled": false,
+      "severity": "high", "reference": "111年版 個資遮蔽規範",
+      "source_clause": "姓名 陳○明；電話 091234****；身分證 E12345****"
+    },
+    {
+      "rule_id": "PB-PROC-01", "rule_name": "公開展覽期間須 ≥ 30 天",
+      "type": "threshold", "field": "public_display_days", "op": ">=", "value": 30,
+      "enabled": false, "severity": "high", "reference": "111年版 流程節點",
+      "source_clause": "公開展覽 30 天 + 公聽會"
+    },
+    {
+      "rule_id": "PB-CONSENT-01", "rule_name": "同意比率須達法定門檻（依年版/案型）",
+      "type": "threshold", "field": "owner_consent_ratio", "op": ">=", "value": 0.6667,
+      "enabled": false, "severity": "critical", "reference": "都更條例 / 自治條例（門檻依案型/年版）",
+      "source_clause": "同意參與比率計算（門檻隨 111↔113 年版不同，需接 version_selector 後啟用）"
+    }
+  ]
+}

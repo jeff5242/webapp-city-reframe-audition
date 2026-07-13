@@ -105,6 +105,8 @@ class AuditData:
     pii_risks: Tuple[PiiRisk, ...]
     term_matches: Tuple[WrongTermMatch, ...] = field(default_factory=tuple)
     number_contexts: Tuple[NumberContext, ...] = field(default_factory=tuple)
+    # 偵測到的附錄名稱（供 playbook 附錄必附規則檢查）。None = 未偵測 → 規則 skip 不誤報缺件。
+    attachments: Optional[Tuple[str, ...]] = None
 
 
 @dataclass(frozen=True)

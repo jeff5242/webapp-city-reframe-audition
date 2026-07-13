@@ -191,6 +191,20 @@ def extract_review_table(pdf_path: str, enhance: bool = True) -> Optional[Review
         except Exception:  # pragma: no cover - defensive; enhancement is best-effort
             pass
 
+    # OCR 驗證循環：以審議資料表的算術約束檢查抽取是否自洽（衍生上限=基準×50% 等）。
+    # 目前 reextract=None → 僅「偵測 + 告警」不自動修正；待接 VLM/高 zoom 逐格重抽後即可自我修正收斂。
+    try:
+        from .verify_loop import verify_review_table
+        data, _vlog, _residual = verify_review_table(data)
+        if _residual:
+            import logging
+            logging.getLogger(__name__).warning(
+                "審議資料表算術約束未滿足（疑似 OCR 誤讀，建議人工複核）：%s",
+                "、".join(_residual),
+            )
+    except Exception:  # pragma: no cover - defensive
+        pass
+
     return data
 
 

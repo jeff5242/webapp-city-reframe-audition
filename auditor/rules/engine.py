@@ -120,3 +120,19 @@ def build_default_engine() -> RuleEngine:
         WrongTermRule(),
         NumberConsistencyRule(),
     ])
+
+
+def build_engine_with_playbook(version: str = "111", playbook_path: str = None) -> RuleEngine:
+    """14 條手寫規則 + playbook 宣告式規則。playbook 缺檔時等同 build_default_engine。
+
+    對應提升方案「缺口 3：規則外部化」——新增規則改 playbook JSON 即可。
+    """
+    from .playbook import load_playbook, default_playbook_path
+
+    engine = build_default_engine()
+    path = playbook_path or default_playbook_path(version)
+    if path:
+        # 只納入 enabled 規則進主引擎（草稿/未複核者不進報告，避免 skip 雜訊與重複判定）
+        live = [r for r in load_playbook(path) if r.spec.get("enabled", True)]
+        engine.rules.extend(live)
+    return engine
