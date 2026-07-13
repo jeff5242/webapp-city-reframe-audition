@@ -649,9 +649,18 @@
         await pollAuditTask(task_id, '審查中，請稍候…');
 
       } else {
-        // ── Fallback: classic multipart form submit ──
-        showOverlay('審查中，請稍候…', '大型 PDF 需要約 30 秒，OCR 辨識掃描頁面中');
-        e.target.submit();
+        // ── 無 S3:直傳檔案 AJAX 送出 → poll → 自動跳報告(不再整頁 POST 落 JSON) ──
+        setMsg('上傳並審查中…');
+        const form = new FormData();
+        form.append('business_plan', bpFile);
+        if (reFile) form.append('rights_exchange', reFile);
+        const resp = await fetch('/audit', { method: 'POST', body: form });
+        if (!resp.ok) {
+          const err = await resp.text();
+          throw new Error(err || '審查失敗');
+        }
+        const { task_id } = await resp.json();
+        await pollAuditTask(task_id, '審查中，請稍候…');
       }
     } catch (err) {
       hideOverlay();
