@@ -145,6 +145,36 @@ def test_find_review_table_by_scoring_when_ocr_garbles_title(tmp_path):
     assert "報核" in text
 
 
+def test_find_review_table_via_vlm_when_enabled():
+    """VLM 開啟時,掃描頁改用 VLM 轉錄來找審議資料表頁(不呼叫 PaddleOCR)。"""
+    import auditor.extractors.review_table as mod
+    from unittest.mock import patch
+
+    garbled_table = (
+        "填表日期: 113年4月30日\n送審類別\n辦理過程\n"
+        "基準容積 1000\n獎勵樓地板面積 520\n權利變換計畫報核 112.09.08\n"
+    )
+    other_page = "申請獎勵容積面積 原建築基地基準容積之30%"
+    fake_pages = [
+        {"page_num": 1, "text": "", "tables": [], "_image_page": True},
+        {"page_num": 2, "text": "", "tables": [], "_image_page": True},
+    ]
+
+    def _transcribe(pdf_path, page_num):
+        return garbled_table if page_num == 2 else other_page
+
+    with patch.object(mod, "get_pdf_metadata", return_value={"total_pages": 2}), \
+         patch.object(mod, "extract_pages_text", return_value=fake_pages), \
+         patch("auditor.parsers.vlm_reader.vlm_enabled", return_value=True), \
+         patch("auditor.parsers.vlm_reader.transcribe_page", side_effect=_transcribe), \
+         patch("auditor.parsers.ocr_reader.ocr_pages") as mock_ocr:
+        page_num, text = mod._find_review_table_page("fake.pdf")
+
+    assert page_num == 2
+    assert "報核" in text
+    mock_ocr.assert_not_called()  # VLM 命中就不落到 PaddleOCR
+
+
 def test_review_table_data_carries_filing_date():
     """ReviewTableData 應帶 report_filing_date 欄位（預設 None）。"""
     from auditor.models import ReviewTableData

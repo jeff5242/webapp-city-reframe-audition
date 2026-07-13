@@ -132,18 +132,30 @@ def _find_review_table_page(pdf_path: str) -> tuple[Optional[int], str]:
     if not image_page_indices:
         return None, ""
 
-    # Second pass — OCR on scanned pages
+    # Second pass — read scanned pages for keyword match. VLM-first (地端、繁中密表
+    # 較準)when VLM_ENDPOINT is set, else fall back to PaddleOCR.
+    ocr_texts: dict[int, str] = {}
     try:
-        from ..parsers.ocr_reader import ocr_available, ocr_pages
-        if not ocr_available():
-            return None, ""
-    except ImportError:
-        return None, ""
+        from ..parsers.vlm_reader import transcribe_page, vlm_enabled
+        if vlm_enabled():
+            for idx in image_page_indices:
+                t = transcribe_page(pdf_path, idx + 1)  # transcribe_page 用 1-based
+                if t and t.strip():
+                    ocr_texts[idx] = unicodedata.normalize("NFKC", t)
+    except Exception:  # pragma: no cover - defensive; VLM is best-effort
+        pass
 
-    ocr_results = ocr_pages(pdf_path, image_page_indices)
-    ocr_texts: dict[int, str] = {
-        idx: unicodedata.normalize("NFKC", raw) for idx, raw in ocr_results.items()
-    }
+    if not ocr_texts:
+        try:
+            from ..parsers.ocr_reader import ocr_available, ocr_pages
+            if not ocr_available():
+                return None, ""
+        except ImportError:
+            return None, ""
+        ocr_results = ocr_pages(pdf_path, image_page_indices)
+        ocr_texts = {
+            idx: unicodedata.normalize("NFKC", raw) for idx, raw in ocr_results.items()
+        }
 
     # Pass A — title keyword + at least one marker (works when OCR is clean)
     for idx, text in ocr_texts.items():
