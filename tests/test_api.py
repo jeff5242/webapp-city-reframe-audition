@@ -31,10 +31,21 @@ skip_if_no_creds = pytest.mark.skipif(
 
 # ── health ───────────────────────────────────────────────────────────────────
 
-def test_health():
+def test_health(monkeypatch):
+    monkeypatch.delenv("VLM_ENDPOINT", raising=False)
     resp = client.get("/health")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok"}
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["ocr_mode"] == "paddleocr"      # no VLM_ENDPOINT → PaddleOCR
+    assert body["vlm_endpoint_host"] is None
+
+
+def test_health_reflects_vlm_switch(monkeypatch):
+    monkeypatch.setenv("VLM_ENDPOINT", "https://gpu.example.com:8000")
+    body = client.get("/health").json()
+    assert body["ocr_mode"] == "vlm"
+    assert body["vlm_endpoint_host"] == "gpu.example.com:8000"
 
 
 # ── homepage ─────────────────────────────────────────────────────────────────

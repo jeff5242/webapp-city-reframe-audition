@@ -622,7 +622,17 @@ if s3_available():
 
 @app.get("/health")
 async def health() -> JSONResponse:
-    return JSONResponse({"status": "ok"})
+    """Health check. Also surfaces the active OCR mode so the地端 VLM vs
+    PaddleOCR switch (VLM_ENDPOINT) is observable at runtime without SSH."""
+    from urllib.parse import urlparse
+    from .parsers.vlm_reader import vlm_enabled
+
+    endpoint = os.getenv("VLM_ENDPOINT", "").strip()
+    return JSONResponse({
+        "status": "ok",
+        "ocr_mode": "vlm" if vlm_enabled() else "paddleocr",
+        "vlm_endpoint_host": urlparse(endpoint).netloc or None,
+    })
 
 
 @app.get("/", response_class=HTMLResponse)
