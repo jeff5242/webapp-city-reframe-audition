@@ -75,6 +75,14 @@ AWS_REGION=ap-northeast-1
 S3_BUCKET=urban-renewal-uploads
 ```
 
+Optional — enable the on-prem VLM OCR (地端 OCR) for the review table. When set,
+`/audit` uses the fast sovereign VLM path instead of the slow CPU OCR tiers:
+```
+VLM_ENDPOINT=http://<on-prem-gpu-host>:8000   # OpenAI-compatible; unset = old OCR path
+VLM_MODEL=default                             # served model name
+VLM_TIMEOUT=60                                # request timeout (seconds)
+```
+
 ---
 
 ## Architecture
@@ -105,7 +113,8 @@ The next sprint task is wiring Track B into the `/audit` endpoint.
 
 1. **Extractors** (`auditor/extractors/`) — parse raw data from PDFs:
    - `review_table.py` — 審議資料表 (submission type, fill date, bonus FAR fields)
-   - `table_extractor.py` — hybrid gap-filler for the dense 審議資料表 grid: on-prem PaddleOCR PP-Structure table recognition first, then Claude vision (page image) escalation when critical-field coverage < 0.6. Only fills fields the text pass missed; never overwrites.
+   - `table_extractor.py` — hybrid gap-filler for the dense 審議資料表 grid. Tier 0 = on-prem **VLM (地端 OCR)** via `vlm_reader.py` when `VLM_ENDPOINT` is set: reads the grid directly in seconds and typically fills every critical field, so the slower CPU tiers are skipped (the switch that turns a timing-out `/audit` into a seconds-out one). Fallback tiers: PaddleOCR PP-Structure → geometric bbox reconstruction → Claude vision escalation (< 0.6 critical coverage). Only fills fields the text pass missed; never overwrites.
+   - `parsers/vlm_reader.py` — the Tier 0 VLM client. Renders the review-table page (size-capped to 2000px), POSTs to an OpenAI-compatible on-prem endpoint (`/v1/chat/completions`, e.g. Qwen2.5-VL via vLLM/LLaMA-Factory), maps the returned JSON to `ReviewTableData` fields. Sovereign (data stays on-prem); degrades to `{}` when unset or on any error.
    - `front_docs.py` — 申請書/切結書/委託書 (report date, implementer name, PII)
    - `term_checker.py` — wrong terminology + number context extraction
 
