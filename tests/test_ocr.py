@@ -225,7 +225,7 @@ def test_extract_front_docs_detects_all_docs_from_toc():
 
     fake_pages = [{"page_num": 1, "text": toc_text, "tables": [], "_image_page": False}]
 
-    with patch("auditor.extractors.front_docs.extract_pages_text", return_value=fake_pages), \
+    with patch("auditor.extractors.front_docs.pages_text", return_value=fake_pages), \
          patch("auditor.extractors.front_docs.scan_pages", return_value=[]):
         fd, _ = extract_front_docs("fake.pdf", use_ocr=False)
 
@@ -246,7 +246,7 @@ def test_extract_front_docs_supplement_fallback_date():
         {"page_num": 25, "text": "依據114年5月28日謄本修正所有權人", "tables": [], "_image_page": False},
     ]
 
-    with patch("auditor.extractors.front_docs.extract_pages_text", return_value=pages), \
+    with patch("auditor.extractors.front_docs.pages_text", return_value=pages), \
          patch("auditor.extractors.front_docs.scan_pages", return_value=[]):
         fd, _ = extract_front_docs("fake.pdf", use_ocr=False)
 
@@ -260,7 +260,7 @@ def test_extract_front_docs_no_ocr_flag_skips_ocr():
 
     pages = [{"page_num": i, "text": "", "tables": [], "_image_page": True} for i in range(1, 5)]
 
-    with patch("auditor.extractors.front_docs.extract_pages_text", return_value=pages), \
+    with patch("auditor.extractors.front_docs.pages_text", return_value=pages), \
          patch("auditor.extractors.front_docs.scan_pages", return_value=[]), \
          patch("auditor.parsers.ocr_reader.ocr_pages") as mock_ocr:
         extract_front_docs("fake.pdf", use_ocr=False)

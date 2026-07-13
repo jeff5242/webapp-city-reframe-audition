@@ -4,7 +4,7 @@ import re
 from typing import List, Tuple, Optional
 
 from ..models import FrontDoc, FrontDocsData, PiiRisk
-from ..parsers.pdf_reader import extract_pages_text
+from ..parsers.page_text import pages_text
 from ..parsers.pii_scanner import scan_pages
 
 _DOC_PATTERNS = {
@@ -181,7 +181,7 @@ def extract_front_docs(
     use_ocr: bool = True,
 ) -> Tuple[FrontDocsData, List[PiiRisk]]:
     # First pass: pdfplumber + pymupdf (no OCR)
-    pages = extract_pages_text(pdf_path, 1, scan_pages_count, ocr_image_pages=False)
+    pages = pages_text(pdf_path, 1, scan_pages_count)
 
     # Identify which front-section pages are still empty after two passes
     image_page_indices = [

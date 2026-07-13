@@ -136,6 +136,58 @@ def _load_json_obj(raw: str) -> Optional[dict]:
     return None
 
 
+def _post_chat(b64: str, prompt: str, max_tokens: int) -> Optional[str]:
+    """POST an image+prompt to the VLM; return the assistant text, or None on error."""
+    model = os.getenv("VLM_MODEL", _DEFAULT_MODEL)
+    try:
+        timeout = float(os.getenv("VLM_TIMEOUT", _DEFAULT_TIMEOUT))
+    except ValueError:
+        timeout = _DEFAULT_TIMEOUT
+    payload = {
+        "model": model,
+        "temperature": 0,
+        "max_tokens": max_tokens,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "image_url",
+                 "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                {"type": "text", "text": prompt},
+            ],
+        }],
+    }
+    try:
+        req = urllib.request.Request(
+            _endpoint(),
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = json.load(resp)
+        return body["choices"][0]["message"]["content"]
+    except Exception as exc:
+        log.warning("VLM request failed (non-fatal): %s", exc)
+        return None
+
+
+# 整頁轉錄(逐頁文字供給器的掃描頁引擎)。一整頁文字 token 較多,上限放大。
+_TRANSCRIBE_PROMPT = (
+    "請把這張頁面影像裡的所有文字,逐行、按閱讀順序完整轉錄出來。"
+    "只輸出文字本身,不要翻譯、不要說明、不要加任何標記。"
+)
+_TRANSCRIBE_MAX_TOKENS = 4096
+
+
+def transcribe_page(pdf_path: str, page_num: int) -> Optional[str]:
+    """VLM 逐頁 OCR:把整頁影像轉錄成文字。VLM 未啟用或失敗回 None。"""
+    if not vlm_enabled():
+        return None
+    b64 = _render_page_jpeg_b64(pdf_path, page_num)
+    if not b64:
+        return None
+    return _post_chat(b64, _TRANSCRIBE_PROMPT, _TRANSCRIBE_MAX_TOKENS)
+
+
 def extract_review_table_fields(pdf_path: str, page_num: int) -> Dict[str, object]:
     """Extract review-table fields via the on-prem VLM. ``{}`` when disabled/failed.
 
@@ -149,36 +201,8 @@ def extract_review_table_fields(pdf_path: str, page_num: int) -> Dict[str, objec
     if not b64:
         return {}
 
-    model = os.getenv("VLM_MODEL", _DEFAULT_MODEL)
-    try:
-        timeout = float(os.getenv("VLM_TIMEOUT", _DEFAULT_TIMEOUT))
-    except ValueError:
-        timeout = _DEFAULT_TIMEOUT
-
-    payload = {
-        "model": model,
-        "temperature": 0,
-        "max_tokens": _MAX_TOKENS,
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"type": "image_url",
-                 "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-                {"type": "text", "text": _PROMPT},
-            ],
-        }],
-    }
-    try:
-        req = urllib.request.Request(
-            _endpoint(),
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            body = json.load(resp)
-        content = body["choices"][0]["message"]["content"]
-    except Exception as exc:
-        log.warning("VLM request failed (non-fatal): %s", exc)
+    content = _post_chat(b64, _PROMPT, _MAX_TOKENS)
+    if content is None:
         return {}
 
     obj = _load_json_obj(content)

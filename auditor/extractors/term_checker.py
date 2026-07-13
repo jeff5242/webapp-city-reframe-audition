@@ -4,7 +4,7 @@ import re
 from typing import List
 
 from ..models import NumberContext, WrongTermMatch
-from ..parsers.pdf_reader import extract_pages_text
+from ..parsers.page_text import pages_text
 
 # Wrong term → correct term mapping for urban renewal documents
 WRONG_TERMS: dict = {
@@ -53,7 +53,7 @@ def _context(text: str, start: int, end: int, window: int = 30) -> str:
 
 def scan_for_wrong_terms(pdf_path: str, max_pages: int = 40) -> List[WrongTermMatch]:
     """Scan PDF pages for wrong/inconsistent terminology."""
-    pages = extract_pages_text(pdf_path, 1, max_pages)
+    pages = pages_text(pdf_path, 1, max_pages)
     matches: List[WrongTermMatch] = []
 
     for page in pages:
@@ -74,7 +74,7 @@ def scan_for_wrong_terms(pdf_path: str, max_pages: int = 40) -> List[WrongTermMa
 
 def extract_number_contexts(pdf_path: str, start_page: int = 10, end_page: int = 60) -> List[NumberContext]:
     """Extract key numbers from main text for consistency cross-check."""
-    pages = extract_pages_text(pdf_path, start_page, end_page)
+    pages = pages_text(pdf_path, start_page, end_page)
     contexts: List[NumberContext] = []
 
     for page in pages:

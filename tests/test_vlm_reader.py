@@ -127,6 +127,21 @@ def test_extract_unparseable_content_returns_empty(monkeypatch):
 
 # ── table_extractor integration wrapper ─────────────────────────────────────
 
+def test_transcribe_page_disabled(monkeypatch):
+    monkeypatch.delenv("VLM_ENDPOINT", raising=False)
+    assert vlm_reader.transcribe_page("x.pdf", 1) is None
+
+
+def test_transcribe_page_happy(monkeypatch):
+    monkeypatch.setenv("VLM_ENDPOINT", "http://gpu:8000")
+    monkeypatch.setattr(vlm_reader, "_render_page_jpeg_b64", lambda p, n: "ZmFrZQ==")
+    monkeypatch.setattr(
+        vlm_reader.urllib.request, "urlopen",
+        lambda req, timeout=0: _resp_with_content("逐行轉錄的整頁文字"),
+    )
+    assert vlm_reader.transcribe_page("x.pdf", 1) == "逐行轉錄的整頁文字"
+
+
 def test_table_extractor_vlm_wrapper_passthrough(monkeypatch):
     from auditor.extractors import table_extractor
     monkeypatch.setattr(
