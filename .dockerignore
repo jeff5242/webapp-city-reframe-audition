@@ -1,8 +1,30 @@
+# Python
 __pycache__
 *.pyc
 *.pyo
 *.pyd
-.git
-.gitignore
+.venv
 *.egg-info
 .pytest_cache
+dist
+build
+*.egg
+
+# VCS
+.git
+.gitignore
+
+# OS
+.DS_Store
+
+# ── PII / 資料目錄:絕不進映像(真實地號/姓名/印鑑) ──
+# 原始案件 PDF(2.8G)
+事業計劃報告書及權利變更計劃書/
+事業計劃報告書及權利變更計劃書.zip
+*.pdf
+# 訓練用高解析圖 / 標註(366M+,含 PII)
+審議資料表PDF圖檔轉PNG for OCR訓練/
+審議資料表_訓練標註/
+# 可能含 PII 的產出報告 / 簡報
+demo_report_*.html
+deck.html
