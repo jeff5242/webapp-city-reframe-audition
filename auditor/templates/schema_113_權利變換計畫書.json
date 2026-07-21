@@ -1,0 +1,140 @@
+{
+  "doc_type": "權利變換計畫書",
+  "version": "113",
+  "source": "臺北市都更處 113 年版官方範本 ODT（權利變換計畫書範本.odt）",
+  "sections": [
+    {
+      "marker": "壹",
+      "title": "計畫緣起與目標",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 1
+    },
+    {
+      "marker": "貳",
+      "title": "都市更新權利變換範圍",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 2
+    },
+    {
+      "marker": "肆",
+      "title": "更新前權利關係人名冊",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 3
+    },
+    {
+      "marker": "伍",
+      "title": "土地改良物拆遷補償費",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 4
+    },
+    {
+      "marker": "陸",
+      "title": "占有他人土地之舊違章建築戶處理",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 5
+    },
+    {
+      "marker": "柒",
+      "title": "更新前後權利價值估價",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 6
+    },
+    {
+      "marker": "捌",
+      "title": "都市更新權利變換有關費用及共同負擔",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 7
+    },
+    {
+      "marker": "玖",
+      "title": "更新後分配及公開抽籤過程",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 8
+    },
+    {
+      "marker": "拾",
+      "title": "更新後分配結果",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 9
+    },
+    {
+      "marker": "拾壹",
+      "title": "地籍整理計畫",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 10
+    },
+    {
+      "marker": "拾貳",
+      "title": "實施進度",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 11
+    },
+    {
+      "marker": "拾參",
+      "title": "相關單位配合辦理事項",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 12
+    },
+    {
+      "marker": "附錄一",
+      "title": "實施者證明文件",
+      "kind": "appendix",
+      "requirement": "required",
+      "order": 13
+    },
+    {
+      "marker": "附錄二",
+      "title": "都市更新事業計畫核定函/事業概要核准函（請視實際情形檢附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 14
+    },
+    {
+      "marker": "附錄三",
+      "title": "三家估價報告書摘要",
+      "kind": "appendix",
+      "requirement": "required",
+      "order": 15
+    },
+    {
+      "marker": "附錄四",
+      "title": "相關合約與費用證明文件（請視實際情形檢附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 16
+    },
+    {
+      "marker": "附錄五",
+      "title": "公辦公聽會相關資料",
+      "kind": "appendix",
+      "requirement": "required",
+      "order": 17
+    },
+    {
+      "marker": "附錄六",
+      "title": "聽證相關資料",
+      "kind": "appendix",
+      "requirement": "required",
+      "order": 18
+    },
+    {
+      "marker": "附錄七",
+      "title": "所有權人協調紀錄（若無則免附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 19
+    }
+  ]
+}

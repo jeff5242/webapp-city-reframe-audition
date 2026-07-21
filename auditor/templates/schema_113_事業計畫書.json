@@ -1,0 +1,301 @@
+{
+  "doc_type": "事業計畫書",
+  "version": "113",
+  "source": "臺北市都更處 113 年版官方範本 ODT（事業計畫書範本.odt）",
+  "sections": [
+    {
+      "marker": "壹",
+      "title": "計畫緣起與目標",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 1
+    },
+    {
+      "marker": "貳",
+      "title": "計畫地區範圍",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 2
+    },
+    {
+      "marker": "參",
+      "title": "現況分析",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 3
+    },
+    {
+      "marker": "肆",
+      "title": "與都市計畫之關係",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 4
+    },
+    {
+      "marker": "伍",
+      "title": "處理方式及區段劃分",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 5
+    },
+    {
+      "marker": "陸",
+      "title": "區內公共設施興修或改善計畫，含配置之設計圖說（請擇一填寫）",
+      "kind": "chapter",
+      "requirement": "choose_one",
+      "order": 6
+    },
+    {
+      "marker": "柒",
+      "title": "整建或維護計畫（請擇一填寫）",
+      "kind": "chapter",
+      "requirement": "choose_one",
+      "order": 7
+    },
+    {
+      "marker": "捌",
+      "title": "保存或維護計畫（請擇一填寫）",
+      "kind": "chapter",
+      "requirement": "choose_one",
+      "order": 8
+    },
+    {
+      "marker": "玖",
+      "title": "重建區段之土地使用計畫",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 9
+    },
+    {
+      "marker": "拾",
+      "title": "拆遷安置計畫",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 10
+    },
+    {
+      "marker": "拾壹",
+      "title": "實施方式及有關費用分擔",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 11
+    },
+    {
+      "marker": "拾貳",
+      "title": "公有財產之處理方式及更新後之分配使用原則（請擇一填寫）",
+      "kind": "chapter",
+      "requirement": "choose_one",
+      "order": 12
+    },
+    {
+      "marker": "拾參",
+      "title": "財務計畫",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 13
+    },
+    {
+      "marker": "拾肆",
+      "title": "維護管理及保固事項",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 14
+    },
+    {
+      "marker": "拾伍",
+      "title": "效益評估",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 15
+    },
+    {
+      "marker": "拾陸",
+      "title": "實施進度",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 16
+    },
+    {
+      "marker": "拾柒",
+      "title": "相關單位配合辦理事項",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 17
+    },
+    {
+      "marker": "拾捌",
+      "title": "其他應加表明之事項",
+      "kind": "chapter",
+      "requirement": "required",
+      "order": 18
+    },
+    {
+      "marker": "附錄一",
+      "title": "實施者證明文件",
+      "kind": "appendix",
+      "requirement": "required",
+      "order": 19
+    },
+    {
+      "marker": "附錄二",
+      "title": "更新單元核准函相關證明文件(或自行劃定更新單元檢討書(併送事業計畫))",
+      "kind": "appendix",
+      "requirement": "required",
+      "order": 20
+    },
+    {
+      "marker": "附錄三",
+      "title": "事業概要核准函影本（若無則免附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 21
+    },
+    {
+      "marker": "附錄四",
+      "title": "事業計畫報核展期函文影本（若無則免附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 22
+    },
+    {
+      "marker": "附錄五",
+      "title": "鄰地協調相關文件（若無則免附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 23
+    },
+    {
+      "marker": "附錄六",
+      "title": "公有土地管理機關意見（若無則免附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 24
+    },
+    {
+      "marker": "附錄七",
+      "title": "更新單元土地權屬清冊",
+      "kind": "appendix",
+      "requirement": "required",
+      "order": 25
+    },
+    {
+      "marker": "附錄八",
+      "title": "更新單元合法建築物權屬清冊（請擇一填寫）",
+      "kind": "appendix",
+      "requirement": "choose_one",
+      "order": 26
+    },
+    {
+      "marker": "附錄九",
+      "title": "其他土地改良物清冊（若無則免附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 27
+    },
+    {
+      "marker": "附錄十",
+      "title": "舊違章建築戶相關文件（若無則免附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 28
+    },
+    {
+      "marker": "附錄十一",
+      "title": "相關機關函文及計畫",
+      "kind": "appendix",
+      "requirement": "required",
+      "order": 29
+    },
+    {
+      "marker": "附錄十二",
+      "title": "交通影響評估報告書摘要（若無則免附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 30
+    },
+    {
+      "marker": "附錄十三",
+      "title": "不動產估價報告書摘要（若無則免附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 31
+    },
+    {
+      "marker": "附錄十四",
+      "title": "特殊因素工程計畫書摘要（若無則免附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 32
+    },
+    {
+      "marker": "附錄十五",
+      "title": "變更都市計畫說明書（若無則免附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 33
+    },
+    {
+      "marker": "附錄十六",
+      "title": "都市更新獎勵相關文件（請視實際情形檢附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 34
+    },
+    {
+      "marker": "附錄十七",
+      "title": "其他獎勵證明文件（若無則免附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 35
+    },
+    {
+      "marker": "附錄十八",
+      "title": "建物殘值及市場租金水準",
+      "kind": "appendix",
+      "requirement": "required",
+      "order": 36
+    },
+    {
+      "marker": "附錄十九",
+      "title": "建築工程建材設備等級表",
+      "kind": "appendix",
+      "requirement": "required",
+      "order": 37
+    },
+    {
+      "marker": "附錄二十",
+      "title": "相關合約與費用證明文件（請視實際情形檢附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 38
+    },
+    {
+      "marker": "附錄二十一",
+      "title": "公辦公聽會相關資料",
+      "kind": "appendix",
+      "requirement": "required",
+      "order": 39
+    },
+    {
+      "marker": "附錄二十二",
+      "title": "聽證相關資料",
+      "kind": "appendix",
+      "requirement": "required",
+      "order": 40
+    },
+    {
+      "marker": "附錄二十三",
+      "title": "所有權人協調紀錄（若無則免附）",
+      "kind": "appendix",
+      "requirement": "optional",
+      "order": 41
+    },
+    {
+      "marker": "附錄二十四",
+      "title": "都市更新事業計畫圖",
+      "kind": "appendix",
+      "requirement": "required",
+      "order": 42
+    }
+  ]
+}
