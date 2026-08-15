@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>都市更新審查報告</title>
+  <title>都更報核計畫書－收件端前處理</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @media print { .no-print { display: none; } }
@@ -17,7 +17,7 @@
   <div class="bg-blue-800 text-white rounded-xl px-8 py-6 mb-6">
     <div class="flex justify-between items-start gap-4">
       <div class="flex-1 min-w-0">
-        <p class="text-blue-200 text-sm mb-1">臺北市都市更新審議自動審查報告</p>
+        <p class="text-blue-200 text-sm mb-1">都更報核計畫書－收件端前處理 整理清單</p>
         <h1 class="text-xl font-bold leading-snug break-words">{{ report.case_name }}</h1>
       </div>
       <div class="text-right text-sm text-blue-200 shrink-0 space-y-1">
@@ -77,7 +77,7 @@
     </div>
     <div class="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
       <p class="text-3xl font-bold text-green-600">{{ report.passes | length }}</p>
-      <p class="text-sm text-green-700 mt-1">✅ 通過項目</p>
+      <p class="text-sm text-green-700 mt-1">✅ 未發現缺漏</p>
     </div>
   </div>
 
@@ -190,22 +190,33 @@
           <span class="text-gray-600">系統資料不足/需判讀 → <span class="font-medium text-gray-700">承辦人工確認（非違規）</span></span>
         </div>
         <div class="flex items-start gap-2">
-          <span class="shrink-0 bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✅ 通過</span>
-          <span class="text-gray-600">符合規定 → <span class="font-medium text-gray-700">無需處理</span></span>
+          <span class="shrink-0 bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✅ 未發現缺漏</span>
+          <span class="text-gray-600">逐項比對未發現缺漏 → <span class="font-medium text-gray-700">仍以承辦認定為準</span></span>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Findings -->
+  <!-- Findings：依理事長第一階段核心功能歸組（形式齊備性／一致性與驗算／會辦研判／其他） -->
   <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
     <div class="px-6 py-4 border-b border-gray-100">
-      <h2 class="font-semibold text-gray-700">審查結果明細</h2>
+      <h2 class="font-semibold text-gray-700">前處理整理清單（明細）</h2>
+      <p class="text-xs text-gray-400 mt-0.5">各項目旁的 <span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold">?</span> 可展開該項檢視內容說明</p>
     </div>
     {# 同一問題頁的標註截圖只內嵌一次（多條 finding 指同頁時避免重複塞 base64 撐爆報告） #}
     {% set shown_pages = namespace(ids=[]) %}
+    {% for group in grouped_findings %}
+    <div class="px-6 py-2.5 bg-slate-100 border-y border-slate-200">
+      <span class="font-semibold text-sm text-slate-700">{{ group.title }}</span>
+      <span class="text-xs text-slate-500 ml-2">{{ group.note }}</span>
+    </div>
+    {% if group.placeholder and not group.findings %}
+    <div class="px-6 py-4 text-sm text-gray-400 flex items-center gap-2">
+      <span>🗺</span><span>{{ group.placeholder }}</span>
+    </div>
+    {% endif %}
     <div class="divide-y divide-gray-100">
-      {% for finding in sorted_findings %}
+      {% for finding in group.findings %}
       {% set status_config = {
         'fail': {'bg': 'bg-red-50', 'border': 'border-red-300', 'badge': 'bg-red-100 text-red-700', 'icon': '🔴'},
         'warn': {'bg': 'bg-yellow-50', 'border': 'border-yellow-300', 'badge': 'bg-yellow-100 text-yellow-700', 'icon': '⚠️'},
@@ -213,6 +224,7 @@
         'skip': {'bg': 'bg-gray-50', 'border': 'border-gray-200', 'badge': 'bg-gray-100 text-gray-500', 'icon': '⏭'},
       } %}
       {% set cfg = status_config.get(finding.status, status_config['skip']) %}
+      {% set help = rule_help.get(finding.rule_id) %}
       <div class="px-6 py-4 {{ cfg.bg }} border-l-4 {{ cfg.border }}">
         <div class="flex items-start justify-between gap-4">
           <div class="flex-1">
@@ -220,6 +232,13 @@
               <span class="text-lg">{{ cfg.icon }}</span>
               <span class="font-medium text-gray-800">{{ finding.rule_name }}</span>
               <span class="text-xs font-mono {{ cfg.badge }} px-2 py-0.5 rounded-full">{{ finding.rule_id }}</span>
+              {% if help %}
+              <button type="button"
+                onclick="document.getElementById('help-{{ finding.rule_id }}-{{ loop.index }}').classList.toggle('hidden')"
+                class="no-print shrink-0 w-4 h-4 inline-flex items-center justify-center rounded-full bg-gray-200 hover:bg-gray-300 text-gray-600 text-[10px] font-bold leading-none cursor-pointer"
+                title="展開此檢查項目說明"
+                aria-label="展開 {{ finding.rule_name }} 說明">?</button>
+              {% endif %}
               {# 標籤反映「應採取的動作」而非規則嚴重度（副總 #4 白話分級）：
                  必檢＝不符法規，實施者一定要改；建議提醒＝系統請人工核對，非客戶違規。 #}
               {% if finding.status == 'fail' and finding.severity == 'critical' %}
@@ -230,6 +249,11 @@
               <span class="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full" title="系統資料不足或需判讀，由承辦人工核對，非實施者違規">建議提醒 · 待人工核對</span>
               {% endif %}
             </div>
+            {% if help %}
+            <div id="help-{{ finding.rule_id }}-{{ loop.index }}" class="hidden ml-7 mb-1.5 text-xs text-gray-500 bg-white/70 border border-gray-200 rounded-lg px-3 py-2">
+              💡 {{ help }}
+            </div>
+            {% endif %}
             <p class="text-sm text-gray-700 ml-7">{{ finding.message }}</p>
             {# 計算三段式（副總 #1）：申請填報 → 依法規應為 → 系統核算 #}
             {% if finding.applied_value or finding.expected_calc or finding.computed_result %}
@@ -298,13 +322,14 @@
       </div>
       {% endfor %}
     </div>
+    {% endfor %}
   </div>
 
   <!-- Structured audit opinion (副總 #6)：可一鍵複製貼進承辦意見書 -->
   <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
     <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
       <div>
-        <h2 class="font-semibold text-gray-700">審核意見（結構化）</h2>
+        <h2 class="font-semibold text-gray-700">前處理整理意見（結構化）</h2>
         <p class="text-xs text-gray-400 mt-0.5">通用條列式，可直接複製貼進承辦意見書再人工潤飾</p>
       </div>
       <button
@@ -494,7 +519,11 @@
             </thead>
             <tbody class="divide-y divide-gray-100">
               {# Bonus pct #}
-              {% set my_bonus = (report.review_table.bonus_floor_area / report.review_table.bonus_limit * 100) | round(1) if (report.review_table and report.review_table.bonus_floor_area and report.review_table.bonus_limit and report.review_table.bonus_limit > 0) else none %}
+              {# 容積獎勵佔比 = 獎勵樓地板 ÷ 基準容積（與 CALC-001、歷史 bonus_pct 同一公式）；
+                 基準缺漏時依「上限 = 基準 × 50%」推回 基準 = 上限 × 2。舊版誤用 ÷上限 導致顯示 >100%。 #}
+              {% set rt0 = report.review_table %}
+              {% set bonus_base = (rt0.base_floor_area or (rt0.bonus_limit * 2 if rt0.bonus_limit else none)) if rt0 else none %}
+              {% set my_bonus = (rt0.bonus_floor_area / bonus_base * 100) | round(1) if (rt0 and rt0.bonus_floor_area and bonus_base and bonus_base > 0) else none %}
               <tr class="hover:bg-gray-50">
                 <td class="px-6 py-3 font-medium text-gray-700">容積獎勵佔比</td>
                 <td class="px-6 py-3 text-center">{{ my_bonus ~ '%' if my_bonus is not none else '—' }}</td>
@@ -572,16 +601,16 @@
 
   <!-- Footer -->
   <div class="text-center text-xs text-gray-400 mt-8 no-print">
-    <p>本報告由自動審查系統產生，僅供初步篩查參考，最終審查結論仍需人工確認。</p>
+    <p>本清單由收件端前處理系統產生，僅標示疑義供承辦參考、不生法律效果；最終認定由承辦及審議會為之。</p>
     <div class="flex justify-center gap-4 mt-2">
       <button onclick="window.print()" class="text-blue-500 underline">列印 / 儲存 PDF</button>
-      <a href="/" class="text-blue-500 underline">重新審查</a>
+      <a href="/" class="text-blue-500 underline">重新上傳</a>
     </div>
   </div>
 
 </div>
 <footer class="text-center text-xs text-gray-400 py-4 mt-8">
-  版本 {{ APP_VERSION }} · 臺北市都市更新審議自動審查
+  版本 {{ APP_VERSION }} · 都更報核計畫書－收件端前處理
 </footer>
 </body>
 </html>

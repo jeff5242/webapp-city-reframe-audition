@@ -28,6 +28,93 @@ def _sort_findings(findings: List[Finding]) -> List[Finding]:
     )
 
 
+# 檢查項目歸類（理事長 115.08.12 文件·第一階段核心功能）：
+# 形式齊備性檢核 / 內容一致性比對＋算式驗算 / 會辦局處研判（規劃中）/ 其他。
+# 依 rule_id 前綴歸組；未知前綴落入「其他」。
+_RULE_GROUPS = [
+    {
+        "key": "completeness",
+        "title": "一、形式齊備性檢核",
+        "note": "法定文件與必填欄位是否齊備（缺漏僅標示提醒，由承辦認定）",
+        "prefixes": ("DOC-", "FORM-", "FMT-"),
+    },
+    {
+        "key": "calculation",
+        "title": "二、內容一致性比對與算式驗算",
+        "note": "跨文件關鍵數值一致性、法規門檻驗算（附計算式）",
+        "prefixes": ("CALC-", "CONS-"),
+    },
+    {
+        "key": "referral",
+        "title": "三、會辦局處研判與提示",
+        "note": "依基地條件研判應會辦之目的事業主管機關",
+        "prefixes": (),
+        "placeholder": "本階段（pre-POC）尚未涵蓋；規劃於正式 POC 建置。",
+    },
+    {
+        "key": "other",
+        "title": "四、其他檢視項目",
+        "note": "個資遮蔽確認與法定用詞比對",
+        "prefixes": ("PII-", "TERM-"),
+    },
+]
+
+# 各檢查項目白話說明（報告內「?」展開用，取代翻查上傳頁長清單）。
+# FMT- 前綴由 _help_for() 以 startswith 對應。
+_RULE_HELP = {
+    "DOC-001": "檢視送件 PDF 是否含「申請書」頁（依關鍵字與目錄定位）。未尋得時標示提醒，請承辦確認是否確實缺件。",
+    "DOC-002": "檢視是否含實施者「切結書」頁。",
+    "DOC-003": "檢視是否含「委託書」（委任代理送件時之必要文件）。",
+    "DOC-004": "檢視是否含「審議資料表」——後續欄位核對與算式驗算之資料來源。",
+    "FORM-001": "檢視審議資料表「送審類別」欄是否已勾選。",
+    "FORM-002": "檢視審議資料表「填表日期」是否填寫（適用法規版次判斷之參考來源之一）。",
+    "FORM-003": "111 年版新增「充電車位」欄位，檢視是否填列。",
+    "CALC-001": "依都更條例第 65 條驗算：容積獎勵申請額度是否超過上限（基準容積 × 50%），報告附完整計算式。",
+    "CALC-002": "依建築技術規則第 167 條之六驗算：無障礙停車位是否達法定最低數量。",
+    "CALC-003": "驗算實設汽車停車位是否不低於法定要求。",
+    "CALC-004": "驗算審議資料表表列之容積獎勵上限，與「基準容積 × 50%」計算值是否一致。",
+    "CONS-001": "比對同一關鍵數值（面積、容積、停車位數等）在文件各處出現時是否前後一致；不一致時僅標示位置，不判斷何者為正確。",
+    "TERM-001": "比對法定用詞是否誤用（如「台北市」應為「臺北市」、「權利變換」誤植等）。",
+    "PII-001": "偵測文件前段是否有未遮蔽之高風險個資（身分證字號、出生日期等），提醒依個資保護規範處理。",
+    "FMT-CH": "依官方範本機讀母版，檢視法定章節是否齊備（確定性比對，不使用 AI）。",
+    "FMT-AP": "依官方範本機讀母版，檢視法定附錄是否齊備（確定性比對，不使用 AI）。",
+    "FMT-XOR": "範本中「請擇一填寫」之項目，檢視是否至少擇一填列。",
+}
+
+
+def _help_for(rule_id: str) -> Optional[str]:
+    """依 rule_id 取得白話說明；FMT-CH-03 等格式母版項目以前綴對應。"""
+    if rule_id in _RULE_HELP:
+        return _RULE_HELP[rule_id]
+    for prefix, text in _RULE_HELP.items():
+        if rule_id.startswith(prefix):
+            return text
+    return None
+
+
+def group_findings(findings: List[Finding]) -> List[dict]:
+    """把檢查結果依理事長第一階段核心功能歸組，供報告分節呈現。
+
+    回傳 [{key,title,note,findings,placeholder?}, ...]；「會辦局處研判」
+    目前無對應規則，以 placeholder 呈現 roadmap；空的其他組別直接省略。
+    """
+    grouped: List[dict] = []
+    matched_ids: set = set()
+    for spec in _RULE_GROUPS:
+        items = [
+            f for f in _sort_findings(findings)
+            if any(f.rule_id.startswith(p) for p in spec["prefixes"])
+        ]
+        matched_ids.update(f.rule_id for f in items)
+        grouped.append({**spec, "findings": items})
+
+    leftovers = [f for f in _sort_findings(findings) if f.rule_id not in matched_ids]
+    if leftovers:
+        grouped[-1] = {**grouped[-1], "findings": grouped[-1]["findings"] + leftovers}
+
+    return [g for g in grouped if g["findings"] or g.get("placeholder")]
+
+
 def _evidence_page(evidence: Optional[str]) -> Optional[int]:
     """從 evidence 字串（如「審議資料表第 11 頁」）抽出頁碼，無則回 None。"""
     if not evidence:
@@ -120,7 +207,7 @@ def audit_opinion_text(report: AuditReport) -> str:
     + 通過項目統計。每項含 現況／核算／法源／建議，方便人工彙整。
     """
     lines: List[str] = []
-    lines.append("臺北市都市更新審議 自動審查意見")
+    lines.append("都更報核計畫書 收件端前處理整理清單")
     lines.append(f"案名：{report.case_name}")
     if report.report_date:
         src = report.report_date_source or ""
@@ -148,7 +235,10 @@ def audit_opinion_text(report: AuditReport) -> str:
         lines.append("")
 
     passes = [f for f in report.findings if f.status == "pass"]
-    lines.append(f"三、通過項目：共 {len(passes)} 項，符合規定，無需處理。")
+    lines.append(
+        f"三、未發現缺漏之項目：共 {len(passes)} 項"
+        "（逐項比對完成、未發現缺漏；本清單僅供參考，仍以承辦認定為準）。"
+    )
     return "\n".join(lines)
 
 
@@ -160,6 +250,8 @@ def generate_report(report: AuditReport, templates_dir: Optional[str] = None) ->
     return template.render(
         report=report,
         sorted_findings=_sort_findings(report.findings),
+        grouped_findings=group_findings(report.findings),
+        rule_help={f.rule_id: _help_for(f.rule_id) for f in report.findings},
         key_numbers=key_numbers(report),
         audit_opinion_text=audit_opinion_text(report),
     )

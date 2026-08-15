@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>都市更新審議自動審查</title>
+  <title>都更報核計畫書－收件端前處理</title>
   <link rel="icon" type="image/png" href="/static/logo.png">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -23,8 +23,8 @@
     <div class="flex items-center gap-4">
       <img src="/static/logo.png" alt="URI Taipei" class="h-14 w-auto object-contain">
       <div>
-        <h1 class="text-2xl font-bold text-gray-800">臺北市都市更新審議</h1>
-        <p class="text-gray-500 mt-0.5">自動審查系統 · POC</p>
+        <h1 class="text-2xl font-bold text-gray-800">都更報核計畫書－收件端前處理</h1>
+        <p class="text-gray-500 mt-0.5">收件端前置整理系統 · POC</p>
         {% if ocr_mode == "vlm" %}
         <span class="inline-flex items-center gap-1 mt-1 bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-0.5 rounded-full">● OCR:地端 VLM</span>
         {% else %}
@@ -93,7 +93,7 @@
         class="w-full bg-blue-700 hover:bg-blue-800 text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         disabled
       >
-        開始審查
+        開始前處理
       </button>
 
       <!-- Progress -->
@@ -186,11 +186,13 @@
 
   <!-- ── 功能說明 ── -->
   <div class="space-y-6">
-    <h2 class="text-lg font-semibold text-gray-700 border-b pb-2">本系統執行的審查項目</h2>
+    <h2 class="text-lg font-semibold text-gray-700 border-b pb-2">本系統執行的檢視項目
+      <span class="text-xs font-normal text-gray-400 ml-2">依第一階段核心功能歸類：形式齊備性／一致性與驗算／會辦研判／其他</span>
+    </h2>
 
-    <!-- 文件完整性 -->
+    <!-- 一、形式齊備性檢核：文件完整性 -->
     <div>
-      <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">文件完整性</h3>
+      <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">一、形式齊備性檢核 ─ 文件完整性</h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3">
           <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">DOC-001</span>
@@ -211,9 +213,9 @@
       </div>
     </div>
 
-    <!-- 審議資料表欄位 -->
+    <!-- 一、形式齊備性檢核：審議資料表欄位 -->
     <div>
-      <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">審議資料表欄位核對</h3>
+      <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">一、形式齊備性檢核 ─ 審議資料表欄位</h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3">
           <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">FORM-001</span>
@@ -230,9 +232,9 @@
       </div>
     </div>
 
-    <!-- 計算驗算 -->
+    <!-- 二、內容一致性比對與算式驗算 -->
     <div>
-      <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">公式計算驗算</h3>
+      <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">二、內容一致性比對與算式驗算</h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div class="flex gap-3 items-start bg-red-50 rounded-lg px-4 py-3 border border-red-100">
           <span class="text-red-500 font-mono text-xs mt-0.5 shrink-0">CALC-001</span>
@@ -250,12 +252,25 @@
           <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">CALC-004</span>
           <div><div class="text-sm font-medium text-gray-700">容積獎勵上限計算驗算</div><div class="text-xs text-gray-500">確認表中上限 ≈ 基準容積 × 50%（都更條例第65條）</div></div>
         </div>
+        <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3">
+          <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">CONS-001</span>
+          <div><div class="text-sm font-medium text-gray-700">關鍵數字前後一致性</div><div class="text-xs text-gray-500">比對審議資料表與主文各章節的停車位數量、容積獎勵面積</div></div>
+        </div>
       </div>
     </div>
 
-    <!-- 個資與用詞 -->
+    <!-- 三、會辦局處研判（規劃中） -->
     <div>
-      <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">個資保護與用詞核對</h3>
+      <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">三、會辦局處研判與提示 <span class="text-gray-400 normal-case font-normal">（規劃中）</span></h3>
+      <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3 border border-dashed border-gray-300">
+        <span class="text-gray-400 text-xs mt-0.5 shrink-0">🗺</span>
+        <div class="text-xs text-gray-500">依基地條件研判涉及之目的事業主管機關、產出建議會辦清單——pre-POC 未涵蓋，規劃於正式 POC 建置。</div>
+      </div>
+    </div>
+
+    <!-- 四、其他檢視項目：個資與用詞 -->
+    <div>
+      <h3 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">四、其他檢視項目 ─ 個資保護與用詞</h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3">
           <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">PII-001</span>
@@ -264,10 +279,6 @@
         <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3">
           <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">TERM-001</span>
           <div><div class="text-sm font-medium text-gray-700">法定用詞錯誤</div><div class="text-xs text-gray-500">偵測常見錯誤用詞，如「協議合件」→「協議合建」</div></div>
-        </div>
-        <div class="flex gap-3 items-start bg-gray-50 rounded-lg px-4 py-3 sm:col-span-2">
-          <span class="text-blue-500 font-mono text-xs mt-0.5 shrink-0">CONS-001</span>
-          <div><div class="text-sm font-medium text-gray-700">關鍵數字前後一致性</div><div class="text-xs text-gray-500">比對審議資料表與主文各章節的停車位數量、容積獎勵面積</div></div>
         </div>
       </div>
     </div>
@@ -383,7 +394,7 @@
       </div>
 
       <p class="text-xs text-amber-700 border-t border-amber-200 pt-3 mt-4">
-        本系統為初步篩查工具，標記的問題仍需人工確認。最終審查結論以人工判斷為準。
+        本系統為收件端前處理工具，於分案前產出「整理清單」供承辦參考；僅標示疑義、不出具肯定性結論、不生法律效果，最終認定由承辦及審議會為之。
       </p>
     </div>
   </div>

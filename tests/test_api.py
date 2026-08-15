@@ -69,7 +69,7 @@ def test_homepage_renders():
     resp = client.get("/")
     assert resp.status_code == 200
     assert "都市更新審議" in resp.text
-    assert "開始審查" in resp.text
+    assert "開始前處理" in resp.text
 
 
 def test_homepage_has_wiki_link():

@@ -274,7 +274,7 @@ def test_opinion_groups_fail_and_warn_with_details():
     assert "法源：都更條例第65條" in text
     assert "二、待人工核對項目（建議提醒）" in text
     assert "【FORM-002】填表日期" in text
-    assert "三、通過項目：共 1 項" in text
+    assert "三、未發現缺漏之項目：共 1 項" in text
     assert "報核日期：112年12月26日" in text
 
 
@@ -284,7 +284,7 @@ def test_opinion_shows_none_for_empty_sections():
     ]))
     # 無 fail、無 warn → 兩節都顯示（無）
     assert text.count("　（無）") == 2
-    assert "三、通過項目：共 1 項" in text
+    assert "三、未發現缺漏之項目：共 1 項" in text
 
 
 def test_opinion_rendered_with_copy_button():
