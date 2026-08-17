@@ -9,8 +9,10 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Tuple
 
 # canonical 名稱 → 比對關鍵字（任一出現即視為存在）
+# 注意：實際計畫書目錄標題常有變體（如「實施者『及相關』證明文件」），
+# 關鍵字須涵蓋常見變體；比對前會先移除空白（見 _normalize）。
 KNOWN_ATTACHMENTS: Dict[str, List[str]] = {
-    "實施者證明文件": ["實施者證明"],
+    "實施者證明文件": ["實施者證明", "實施者及相關證明", "實施者相關證明"],
     "更新單元核准函": ["更新單元核准函", "核准函"],
     "更新單元土地權屬清冊": ["土地權屬清冊"],
     "更新單元合法建築物權屬清冊": ["合法建築物權屬清冊"],
@@ -36,11 +38,23 @@ REQUIRED_ATTACHMENTS: Tuple[str, ...] = (
 )
 
 
+def _normalize(text: str) -> str:
+    """NFKC 正規化＋移除空白：目錄標題常夾雜全半形空格與點線。"""
+    import unicodedata
+
+    normalized = unicodedata.normalize("NFKC", text)
+    return "".join(normalized.split())
+
+
 def detect_attachments(text: str) -> Tuple[str, ...]:
     """從文字偵測已檢附的附錄名稱（canonical）。純函式，易測。"""
     if not text:
         return tuple()
-    found = [name for name, kws in KNOWN_ATTACHMENTS.items() if any(kw in text for kw in kws)]
+    haystack = _normalize(text)
+    found = [
+        name for name, kws in KNOWN_ATTACHMENTS.items()
+        if any(_normalize(kw) in haystack for kw in kws)
+    ]
     return tuple(found)
 
 

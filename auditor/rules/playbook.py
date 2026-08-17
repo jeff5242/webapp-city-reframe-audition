@@ -121,7 +121,12 @@ class PlaybookRule(Rule):
         name = self.spec["attachment"]
         if name in data.attachments:
             return self._pass(f"{self.rule_name}：已檢附")
-        return self._fail(f"{self.rule_name}：未檢附（111年版必附）")
+        # 偵測為文件前段關鍵字啟發式，偵測不到 ≠ 確定缺件（目錄標題變體、
+        # 掃描頁無文字層都會漏抓）→ 標示疑義交承辦認定，不出「未檢附」定論。
+        return self._warn(
+            f"{self.rule_name}：文件前段未偵測到此附錄（111年版必附），"
+            "請承辦確認是否檢附"
+        )
 
 
 def load_playbook(path: str) -> List[PlaybookRule]:

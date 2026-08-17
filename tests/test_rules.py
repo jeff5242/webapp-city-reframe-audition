@@ -449,3 +449,42 @@ class TestBonusLimitVerifyRule:
     def test_warn_when_data_missing(self):
         finding = BonusLimitVerifyRule().evaluate(_make_data(base_floor_area=None))
         assert finding.status == "warn"
+
+
+# ── 附錄偵測：目錄標題變體（客戶實案 2026-08-17 回報）────────────────
+
+
+def test_detect_attachments_matches_title_variant_with_extra_words():
+    from auditor.extractors.attachments import detect_attachments
+
+    toc = "附錄一、 實施者及相關證明文件 ......... 附錄-1\n附錄三、 更新單元土地權屬清冊 ... 附錄-5"
+    found = detect_attachments(toc)
+    assert "實施者證明文件" in found
+    assert "更新單元土地權屬清冊" in found
+
+
+def test_detect_attachments_tolerates_fullwidth_spaces():
+    from auditor.extractors.attachments import detect_attachments
+
+    toc = "附錄十四、　建材設備　等級表"
+    assert "建築工程建材設備等級表" in detect_attachments(toc)
+
+
+def test_playbook_attachment_undetected_warns_not_fails():
+    """啟發式偵測不到 → 標示疑義（warn），不得武斷判「未檢附」fail。"""
+    from auditor.rules.playbook import PlaybookRule
+    from auditor.models import AuditData
+
+    rule = PlaybookRule({
+        "rule_id": "PB-DOC-A14", "rule_name": "附錄十四 建材設備等級表 必附",
+        "type": "attachment_present", "attachment": "建築工程建材設備等級表",
+        "enabled": True, "severity": "high", "reference": "111年版 附錄清單·十四",
+    })
+    data = AuditData(review_table=None, front_docs=None, pii_risks=(), attachments=("實施者證明文件",))
+    f = rule.evaluate(data)
+    assert f.status == "warn"
+    assert "請承辦確認" in f.message
+
+    data_found = AuditData(review_table=None, front_docs=None, pii_risks=(),
+                           attachments=("建築工程建材設備等級表",))
+    assert rule.evaluate(data_found).status == "pass"
