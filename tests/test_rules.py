@@ -488,3 +488,31 @@ def test_playbook_attachment_undetected_warns_not_fails():
     data_found = AuditData(review_table=None, front_docs=None, pii_risks=(),
                            attachments=("建築工程建材設備等級表",))
     assert rule.evaluate(data_found).status == "pass"
+
+
+def test_annotator_boxes_applied_value_on_page():
+    """fail finding 的申報值出現在頁面上時，除頁首警示帶外應加數值定位框。"""
+    import fitz
+    from auditor.annotator import annotate_pdf, _values_to_locate
+    from auditor.models import Finding
+
+    f = Finding("CALC-001", "容積獎勵申請額度不超過上限", "fail", "critical",
+                "超過上限", evidence="審議資料表第 1 頁",
+                applied_value="獎勵樓地板面積 4,680.00 m²")
+    assert _values_to_locate(f) == ["4,680.00"]
+
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 200), "4,680.00", fontsize=12)
+    import tempfile, os
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(doc.tobytes())
+        path = tmp.name
+    try:
+        out = fitz.open(stream=annotate_pdf(path, [f]), filetype="pdf")
+        annots = list(out[0].annots() or [])
+        # 頁首警示帶 + 數值定位框 ≥ 2
+        assert len(annots) >= 2
+        assert any("申報值 4,680.00" in (a.info.get("content") or "") for a in annots)
+    finally:
+        os.unlink(path)
